@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "glow-patrol-server",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8074"],
+      "port": 8074
+    }
+  ]
+}

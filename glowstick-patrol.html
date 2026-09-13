@@ -1,0 +1,3100 @@
+<title>Glowstick Patrol</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Baloo+2:wght@400;500;600;800&display=swap">
+<style>
+  :root{
+    --ink:#150E2B;
+    --panel:#211737;
+    --panel-soft:#2C2050;
+    --panel-soft-2:#372861;
+    --pink:#FF5FA2;
+    --pink-dim:#B23E70;
+    --amber:#FFC15E;
+    --teal:#52E8C6;
+    --cream:#F5EFFF;
+    --dim:#B9A9E0;
+    --line: rgba(245,239,255,.10);
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--ink);
+    color:var(--cream);
+    font-family:'Baloo 2', ui-rounded, 'Nunito', sans-serif;
+    display:flex;
+    justify-content:center;
+    min-height:100vh;
+  }
+  h1,h2,h3,.display{
+    font-family:'Jua','Baloo 2',sans-serif;
+    font-weight:400;
+    text-wrap:balance;
+    letter-spacing:.01em;
+  }
+  button{font-family:inherit;}
+  button:focus-visible, .tab-btn:focus-visible, .swatch:focus-visible{
+    outline:3px solid var(--teal);
+    outline-offset:2px;
+  }
+  .tabular{font-variant-numeric:tabular-nums;}
+
+  .device-frame{
+    width:min(460px,96vw);
+    margin:28px 0;
+    padding:12px;
+    border-radius:30px;
+    background:linear-gradient(180deg,var(--panel-soft-2),var(--panel));
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:0 30px 70px rgba(5,2,20,.55), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  .screen-window{
+    background:radial-gradient(120% 90% at 50% -10%, #2A1F4C 0%, var(--ink) 55%);
+    border-radius:22px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    height:min(760px,86vh);
+    position:relative;
+    border:1px solid var(--line);
+  }
+
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:14px 16px 10px;
+    flex:none;
+  }
+  .brand{display:flex;align-items:center;gap:8px;}
+  .brand-mark{
+    width:30px;height:30px;border-radius:9px;
+    background:conic-gradient(from 210deg, var(--pink), var(--amber), var(--teal), var(--pink));
+    box-shadow:0 0 14px rgba(255,95,162,.55);
+    flex:none;
+  }
+  .brand-name{font-family:'Jua'; font-size:17px; letter-spacing:.02em;}
+  .points-pill{
+    display:flex; align-items:center; gap:6px;
+    background:var(--panel-soft);
+    border:1px solid var(--line);
+    padding:6px 12px 6px 8px;
+    border-radius:999px;
+    font-weight:800; font-size:14px;
+    color:var(--amber);
+  }
+  .points-pill .star{filter:drop-shadow(0 0 4px rgba(255,193,94,.7));}
+  .lvl-badge{
+    margin-left:2px; padding:2px 7px; border-radius:999px;
+    background:var(--panel-soft-2); color:var(--teal); font-size:10px; font-weight:800;
+  }
+  .topbar-right{display:flex; align-items:center; gap:8px;}
+  .icon-btn{
+    width:32px; height:32px; flex:none; border-radius:50%;
+    background:var(--panel-soft); border:1px solid var(--line); color:var(--cream);
+    font-size:15px; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    transition:border-color .15s ease, transform .15s ease;
+  }
+  .icon-btn:hover{border-color:var(--pink);}
+  .icon-btn:active{transform:scale(.92);}
+
+  .stage{
+    flex:1;
+    overflow-y:auto;
+    padding:6px 16px 16px;
+    position:relative;
+  }
+  .stage::-webkit-scrollbar{width:6px;}
+  .stage::-webkit-scrollbar-thumb{background:var(--panel-soft-2);border-radius:6px;}
+  @keyframes screenIn{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:translateY(0);} }
+  .screen-anim > *{ animation: screenIn .24s ease both; }
+  @media (prefers-reduced-motion: reduce){ .screen-anim > *{ animation:none; } }
+
+  .tabbar{
+    flex:none;
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:3px;
+    padding:8px 8px calc(10px + env(safe-area-inset-bottom));
+    border-top:1px solid var(--line);
+    background:rgba(21,14,43,.6);
+  }
+  .tab-btn{
+    background:none; border:none; color:var(--dim);
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:7px 1px; border-radius:12px; cursor:pointer;
+    font-size:10.5px; font-weight:600;
+    transition:color .15s ease, background .15s ease, transform .15s ease;
+  }
+  .tab-btn .ico{font-size:17px; line-height:1;}
+  .tab-btn.active{ color:var(--ink); background:var(--cream); }
+  .tab-btn:not(.active):hover{ background:var(--panel-soft); color:var(--cream); }
+  .tab-btn:active{transform:scale(.94);}
+
+  /* ---------- shared bits ---------- */
+  .card{
+    background:var(--panel-soft);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:14px;
+  }
+  /* ---------- 3D tilt (pointer-driven depth on cards/tiles) ---------- */
+  .card, .arcade-card, .swatch, .stat, .boy-row, .xp-card, .closet-preview .avatar{
+    perspective:500px;
+    transform-style:preserve-3d;
+    transition:transform .18s ease;
+    will-change:transform;
+  }
+  .card .ico, .arcade-card .ico, .home-grid .ico{ transform:translateZ(14px); }
+  @media (prefers-reduced-motion: reduce){
+    .card, .arcade-card, .swatch, .stat, .boy-row, .xp-card, .closet-preview .avatar{ transition:none; }
+  }
+  .eyebrow{
+    font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.11em;
+    color:var(--teal); margin:0 0 4px;
+  }
+  .btn{
+    font-weight:800; border-radius:14px; border:none; cursor:pointer;
+    padding:11px 16px; font-size:14.5px; color:var(--ink);
+    background:var(--cream);
+    transition:transform .12s ease, filter .15s ease;
+  }
+  .btn:hover{filter:brightness(1.05);}
+  .btn:active{transform:scale(.96);}
+  .btn-primary{ background:linear-gradient(135deg,var(--pink),#ff8fc4); color:#2A0A18; }
+  .btn-ghost{ background:var(--panel-soft-2); color:var(--cream); border:1px solid var(--line); }
+  .btn:disabled{opacity:.45; cursor:not-allowed; filter:none;}
+
+  /* ---------- avatar (vector-art sprites) ---------- */
+  .avatar{ position:relative; width:var(--av,120px); height:var(--av,120px); flex:none; }
+  .sprite-img{
+    width:100%; height:100%; object-fit:contain;
+    filter:drop-shadow(0 6px 10px rgba(0,0,0,.35));
+  }
+  .avatar .badge{
+    position:absolute; right:-4%; bottom:2%; font-size:calc(var(--av,120px) * .24);
+    filter:drop-shadow(0 3px 4px rgba(0,0,0,.4));
+  }
+  .lantern-sprite{
+    width:70%; height:70%; object-fit:contain;
+  }
+
+  /* ---------- home ---------- */
+  .hero{
+    display:flex; align-items:center; gap:14px;
+    padding:10px 4px 16px;
+  }
+  .hero h1{font-size:22px; margin:0 0 2px;}
+  .hero p{margin:0; color:var(--dim); font-size:13.5px; line-height:1.4;}
+  .forecast{
+    margin-top:2px; display:flex; gap:8px; align-items:flex-start;
+    background:var(--panel-soft-2); border-radius:14px; padding:10px 12px; font-size:13px; color:var(--cream);
+  }
+  .xp-card{ margin-top:10px; background:var(--panel-soft); border:1px solid var(--line); border-radius:14px; padding:10px 12px; }
+  .xp-head{ display:flex; justify-content:space-between; font-size:11.5px; font-weight:700; color:var(--dim); margin-bottom:7px; }
+  .xp-head b{ color:var(--amber); font-size:13px; }
+  .xp-bar{ height:8px; border-radius:5px; background:var(--panel-soft-2); overflow:hidden; }
+  .xp-fill{ height:100%; background:linear-gradient(90deg,var(--teal),var(--pink)); transition:width .5s ease; }
+  .home-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px; }
+  .home-grid .card{ cursor:pointer; text-align:left; }
+  .home-grid .card:hover{ border-color:var(--pink); }
+  .home-grid .ico{font-size:22px;}
+  .home-grid h3{font-size:14.5px; margin:8px 0 2px;}
+  .home-grid p{font-size:12px; color:var(--dim); margin:0;}
+  .stat-row{ display:flex; gap:8px; margin-top:14px; }
+  .stat{ flex:1; background:var(--panel-soft); border:1px solid var(--line); border-radius:14px; padding:10px; text-align:center; }
+  .stat b{display:block; font-size:17px; color:var(--amber);}
+  .stat span{font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em;}
+
+  /* ---------- clubhouse ---------- */
+  .subtabs{ display:flex; gap:8px; margin:8px 0 14px; }
+  .subtab{
+    flex:1; background:var(--panel-soft); border:1px solid var(--line); color:var(--dim);
+    border-radius:12px; padding:9px; font-weight:700; font-size:13px; cursor:pointer;
+  }
+  .subtab.active{ background:var(--pink); color:#2A0A18; border-color:transparent; }
+  .closet-preview{ display:flex; justify-content:center; padding:6px 0 16px; }
+  .swatch-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .swatch{
+    background:var(--panel-soft); border:1px solid var(--line); border-radius:14px;
+    padding:10px 6px 8px; text-align:center; cursor:pointer; color:var(--cream);
+  }
+  .swatch.equipped{ border-color:var(--teal); box-shadow:0 0 0 2px rgba(82,232,198,.25) inset; }
+  .swatch.locked{ opacity:.72; }
+  .swatch .mini-av{ margin:0 auto 6px; }
+  .swatch .name{ font-size:11.5px; font-weight:700; }
+  .swatch .cost{ font-size:10.5px; color:var(--amber); margin-top:2px; }
+  .color-dot{
+    width:40px; height:40px; border-radius:50%; margin:0 auto 6px;
+    border:2px solid rgba(255,255,255,.3);
+  }
+  .style-heading{ margin-top:16px; }
+  .style-heading:first-of-type{ margin-top:4px; }
+
+  .boy-list{ display:flex; flex-direction:column; gap:10px; }
+  .boy-row{
+    display:flex; align-items:center; gap:12px;
+    background:var(--panel-soft); border:1px solid var(--line); border-radius:16px; padding:10px;
+    cursor:pointer;
+  }
+  .boy-row:hover{border-color:var(--amber);}
+  .lantern-av{
+    width:52px; height:52px; border-radius:14px; flex:none;
+    display:flex; align-items:center; justify-content:center; font-size:24px;
+    background:radial-gradient(circle at 35% 25%, rgba(255,255,255,.35), transparent 55%), var(--bcolor,#FFC15E);
+  }
+  .boy-info{flex:1; min-width:0;}
+  .boy-info .name{font-weight:800; font-size:14.5px;}
+  .boy-info .role{font-size:11.5px; color:var(--dim);}
+  .affection-bar{ height:6px; border-radius:4px; background:var(--panel-soft-2); margin-top:6px; overflow:hidden; }
+  .affection-fill{ height:100%; background:linear-gradient(90deg,var(--pink),var(--amber)); }
+
+  .dialogue-card{ display:flex; flex-direction:column; gap:12px; align-items:center; text-align:center; padding-top:8px; }
+  .dialogue-bubble{
+    background:var(--panel-soft); border:1px solid var(--line); border-radius:16px;
+    padding:14px; font-size:14px; line-height:1.45; min-height:56px;
+  }
+
+  /* ---------- battle ---------- */
+  .battle-hud{ display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:800; font-size:13.5px; }
+  .battle-wrap{ position:relative; border-radius:16px; overflow:hidden; border:1px solid var(--line); background:#0F0A22; }
+  #battleCanvas, #rhythmCanvas, #brawlCanvas{ width:100%; display:block; touch-action:none; }
+  .brawl-arena{
+    transform:perspective(900px) rotateX(9deg);
+    transform-origin:center bottom;
+    box-shadow:0 26px 34px -12px rgba(0,0,0,.55);
+  }
+  @media (prefers-reduced-motion: reduce){ .brawl-arena{ transform:none; } }
+  .brawl-controls{ display:flex; gap:8px; margin-top:10px; }
+  .brawl-btn{
+    flex:1; background:var(--panel-soft); border:2px solid var(--line); border-radius:14px;
+    font-size:20px; color:var(--cream); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; user-select:none; touch-action:none; padding:14px 0;
+  }
+  .brawl-btn.punch{
+    flex:1.7; background:linear-gradient(135deg,var(--pink),#ff8fc4); color:#2A0A18;
+    border-color:transparent; font-size:14.5px; font-weight:800; gap:6px;
+  }
+  .brawl-btn:active{ transform:scale(.94); }
+  .hearts-row{ font-size:15px; letter-spacing:2px; }
+  .overlay-center{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:12px; background:rgba(15,10,34,.82); text-align:center; padding:20px;
+    animation: screenIn .3s ease both;
+  }
+  @media (prefers-reduced-motion: reduce){ .overlay-center{ animation:none; } }
+
+  /* ---------- arcade ---------- */
+  .arcade-grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:6px; }
+  .arcade-card{ text-align:left; cursor:pointer; }
+  .arcade-card .ico{font-size:26px;}
+  .arcade-card h3{font-size:14px; margin:8px 0 2px;}
+  .arcade-card p{font-size:11.5px; color:var(--dim); margin:0 0 8px;}
+  .arcade-card .best{font-size:11px; color:var(--amber); font-weight:700;}
+
+  .lane-buttons{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:10px; }
+  .lane-btn{
+    background:var(--panel-soft); border:2px solid var(--line); border-radius:12px; padding:12px 0;
+    font-weight:800; color:var(--cream); font-size:15px; cursor:pointer;
+  }
+  .lane-btn:active{ background:var(--pink); border-color:var(--pink); }
+
+  .memory-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:10px; }
+  .mem-card{ aspect-ratio:1; perspective:400px; cursor:pointer; user-select:none; }
+  .mem-card-inner{
+    position:relative; width:100%; height:100%;
+    transform-style:preserve-3d; transition:transform .4s ease;
+  }
+  .mem-card.flipped .mem-card-inner, .mem-card.matched .mem-card-inner{ transform:rotateY(180deg); }
+  .mem-face{
+    position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden;
+    display:flex; align-items:center; justify-content:center; font-size:22px; border-radius:12px;
+  }
+  .mem-front{ background:var(--panel-soft-2); border:1px solid var(--line); }
+  .mem-back{ background:var(--panel-soft); border:1px solid var(--amber); transform:rotateY(180deg); }
+  .mem-card.matched{ opacity:.6; }
+  @media (prefers-reduced-motion: reduce){ .mem-card-inner{ transition:none; } }
+
+  .lantern-says-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px; }
+  .ls-lantern{
+    aspect-ratio:1; border-radius:22px; font-size:38px; cursor:pointer;
+    border:3px solid rgba(255,255,255,.12); background:var(--lc,#FFC15E); opacity:.5;
+    transition:opacity .15s ease, transform .1s ease, box-shadow .15s ease;
+  }
+  .ls-lantern.active{ opacity:1; transform:scale(1.06); box-shadow:0 0 26px var(--lc,#FFC15E); }
+  .ls-lantern:disabled{ cursor:default; }
+  .ls-status{ text-align:center; margin-top:14px; color:var(--dim); font-size:13px; min-height:20px; }
+
+  .quiz-passage{
+    background:var(--panel-soft-2); border-radius:12px; padding:10px 12px;
+    font-size:12.5px; line-height:1.55; margin-bottom:12px; color:var(--cream);
+  }
+  .quiz-choices{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+  .quiz-choice{
+    background:var(--panel-soft); border:2px solid var(--line); border-radius:12px;
+    padding:10px 12px; text-align:left; font-size:13.5px; font-weight:600;
+    color:var(--cream); cursor:pointer; font-family:inherit;
+  }
+  .quiz-choice:hover:not(:disabled){ border-color:var(--pink); }
+  .quiz-choice.correct{ border-color:var(--teal); background:rgba(82,232,198,.15); }
+  .quiz-choice.incorrect{ border-color:var(--pink); background:rgba(255,95,162,.15); }
+  .quiz-choice:disabled{ cursor:default; }
+  .quiz-feedback{ margin-top:10px; font-size:13px; font-weight:700; min-height:18px; }
+
+  .toast{
+    position:absolute; left:50%; bottom:74px; transform:translateX(-50%) translateY(10px);
+    background:var(--cream); color:var(--ink); font-weight:700; font-size:13px;
+    padding:9px 14px; border-radius:999px; box-shadow:0 8px 20px rgba(0,0,0,.35);
+    opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+    white-space:nowrap; z-index:20;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  @media (prefers-reduced-motion:no-preference){
+    .pulse{ animation:pulseAnim 2.4s ease-in-out infinite; }
+  }
+  @keyframes pulseAnim{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.05);} }
+</style>
+
+<div class="device-frame">
+  <div class="screen-window">
+    <div class="topbar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div class="brand-name">Glowstick Patrol</div>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" id="soundToggle" type="button" aria-label="Toggle sound">🔊</button>
+        <div class="points-pill"><span class="star">⭐</span><span id="pointsDisplay" class="tabular">0</span><span class="lvl-badge" id="levelBadge">Lv.1</span></div>
+      </div>
+    </div>
+    <div class="stage" id="stage"></div>
+    <div class="tabbar" id="tabbar">
+      <button class="tab-btn" data-screen="home"><span class="ico">🏠</span>HQ</button>
+      <button class="tab-btn" data-screen="clubhouse"><span class="ico">🏮</span>Club</button>
+      <button class="tab-btn" data-screen="battle"><span class="ico">✨</span>Battle</button>
+      <button class="tab-btn" data-screen="arcade"><span class="ico">🎮</span>Games</button>
+      <button class="tab-btn" data-screen="study"><span class="ico">📚</span>Study</button>
+    </div>
+    <div class="toast" id="toast"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var OUTFITS = [
+    {id:'starter', name:'Practice Fit',   cost:0,   hair:'#3B2A6B', outfit:'#6C5CE7', icon:'🎤'},
+    {id:'stage',   name:'Stage Sparkle',  cost:40,  hair:'#B93B6B', outfit:'#FF5FA2', icon:'⭐'},
+    {id:'beat',    name:'Beat Armor',     cost:60,  hair:'#154C40', outfit:'#52E8C6', icon:'⚡'},
+    {id:'lantern', name:'Lantern Silk',   cost:80,  hair:'#7A3B12', outfit:'#FFC15E', icon:'🏮'},
+    {id:'moon',    name:'Moonlit Hanbok', cost:100, hair:'#101033', outfit:'#8E7CFF', icon:'🌙'},
+    {id:'encore',  name:'Encore Gold',    cost:150, hair:'#3B2A6B', outfit:'#FFD36E', icon:'🏆'},
+    {id:'honor',   name:'Honor Roll Cape',cost:180, hair:'#B93B6B', outfit:'#52E8C6', icon:'📚'},
+    {id:'genius',  name:'Genius Galaxy Suit', cost:260, hair:'#101033', outfit:'#FF5FA2', icon:'🧠'}
+  ];
+
+  var WEAPONS = [
+    {id:'glowstick', name:'Practice Glowstick', cost:0,   glow:'#FFC15E', type:'baton', desc:'Your trusty starter light.'},
+    {id:'comet',     name:'Comet Baton',        cost:60,  glow:'#52E8C6', type:'baton', desc:'+10% score in Zap Patrol.', bonus:{zapScore:0.10}},
+    {id:'storm',     name:'Storm Rod',          cost:90,  glow:'#8E7CFF', type:'blade', desc:'Longer punch reach in Alley Brawl.', bonus:{punchRange:14}},
+    {id:'solar',     name:'Solar Scepter',      cost:140, glow:'#FF5FA2', type:'blade', desc:'+18% score in Zap Patrol.', bonus:{zapScore:0.18}},
+    {id:'galaxy',    name:'Galaxy Wand',        cost:220, glow:'#FFD36E', type:'fan',   desc:'Longer reach and bonus Zap score.', bonus:{zapScore:0.12, punchRange:10}}
+  ];
+  function weaponById(id){
+    for(var i=0;i<WEAPONS.length;i++){ if(WEAPONS[i].id===id) return WEAPONS[i]; }
+    return WEAPONS[0];
+  }
+
+  var HAIRSTYLES = [
+    {id:'bob', name:'Classic Bob', cost:0},
+    {id:'twintails', name:'Twin Tails', cost:35},
+    {id:'ponytail', name:'Vanguard Ponytail', cost:50},
+    {id:'undercut', name:'Seer Undercut', cost:50},
+    {id:'buns', name:'Firecracker Buns', cost:50}
+  ];
+  function hairstyleById(id){
+    for(var i=0;i<HAIRSTYLES.length;i++){ if(HAIRSTYLES[i].id===id) return HAIRSTYLES[i]; }
+    return HAIRSTYLES[0];
+  }
+
+  var HAIR_COLORS = [
+    {id:'violet', name:'Midnight Violet', hex:'#3B2A6B', cost:0},
+    {id:'rose',   name:'Rose',            hex:'#B93B6B', cost:20},
+    {id:'gold',   name:'Golden Blonde',   hex:'#FFC15E', cost:20},
+    {id:'mint',   name:'Mint',            hex:'#52E8C6', cost:20},
+    {id:'pink',   name:'Bubblegum Pink',  hex:'#FF5FA2', cost:20},
+    {id:'jet',    name:'Jet Black',       hex:'#101033', cost:20}
+  ];
+  function hairColorById(id){
+    for(var i=0;i<HAIR_COLORS.length;i++){ if(HAIR_COLORS[i].id===id) return HAIR_COLORS[i]; }
+    return HAIR_COLORS[0];
+  }
+
+  var HEADWEAR = [
+    {id:'none',          name:'No Headwear',  cost:0},
+    {id:'bow',           name:'Ribbon Bow',   cost:30},
+    {id:'star-clip',     name:'Star Clip',    cost:25},
+    {id:'flower-crown',  name:'Flower Crown', cost:45},
+    {id:'cat-ears',      name:'Cat Ears',     cost:40}
+  ];
+  function headwearById(id){
+    for(var i=0;i<HEADWEAR.length;i++){ if(HEADWEAR[i].id===id) return HEADWEAR[i]; }
+    return HEADWEAR[0];
+  }
+
+  var FACE_ACC = [
+    {id:'none',     name:'No Accessory', cost:0},
+    {id:'blush',    name:'Rosy Blush',   cost:15},
+    {id:'glasses',  name:'Star Glasses', cost:30},
+    {id:'freckles', name:'Freckles',     cost:15}
+  ];
+  function faceAccById(id){
+    for(var i=0;i<FACE_ACC.length;i++){ if(FACE_ACC[i].id===id) return FACE_ACC[i]; }
+    return FACE_ACC[0];
+  }
+
+  var HUNTERS = [
+    {id:'rae', name:'Rae', title:'The Vanguard',
+      tagline:'First through the fog, glowstick blazing. She hits fast and loud.',
+      hairstyle:'ponytail', hairColor:'rose', outfit:'stage', weapon:'solar'},
+    {id:'suna', name:'Suna', title:'The Seer',
+      tagline:'Reads the shadows before they move. Calm hands, sharper aim.',
+      hairstyle:'undercut', hairColor:'mint', outfit:'beat', weapon:'comet'},
+    {id:'yumi', name:'Yumi', title:'The Firecracker',
+      tagline:'Loudest laugh in the alley, loudest glow in the fight.',
+      hairstyle:'buns', hairColor:'gold', outfit:'lantern', weapon:'galaxy'}
+  ];
+  function hunterById(id){
+    for(var i=0;i<HUNTERS.length;i++){ if(HUNTERS[i].id===id) return HUNTERS[i]; }
+    return null;
+  }
+
+  var LANTERNBOYS = [
+    {id:'hae', name:'Hae', color:'#FFC15E', role:'Leader — carries the biggest lantern',
+      lines:[
+        "Patrol went quiet tonight. Quiet is good. Quiet means the noodle cart is safe.",
+        "I polished my lantern for an hour. An HOUR. It's very shiny now.",
+        "If a Gloomling asks you to dance, say no. They cheat.",
+        "You're getting really good at this. The other lanterns talk about you."
+      ]},
+    {id:'bit', name:'Bit', color:'#FF8B5E', role:'Dancer — hums while he walks',
+      lines:[
+        "I made up a new step for the encore. Wanna see it? ...okay later then.",
+        "Fought a Gloomling earlier. We ended up just dancing instead. Ten out of ten.",
+        "Do you ever hum during battle? I do. It confuses them.",
+        "Your outfit today is a solid nine. I'm saving the ten for stage day."
+      ]},
+    {id:'nun', name:'Nun', color:'#FFE08A', role:'Quiet one — talks to the moths',
+      lines:[
+        "The moths said a storm is coming. I believe them more than the weather app.",
+        "...",
+        "Thank you for the light. Not everyone shares theirs.",
+        "I counted 212 stars tonight. You were the 213th good thing."
+      ]}
+  ];
+
+  var MEM_ICONS = ['🎤','⭐','🏮','🌙','⚡','🍡'];
+
+  var FORECASTS = [
+    "Tonight's forecast: light fog, three Gloomlings spotted near the noodle cart.",
+    "Clear skies. The Lanternboys say it's a good night for an encore.",
+    "Static in the air — Grumbles are extra grumpy tonight. Warm up your zap.",
+    "Moth migration overhead. Nun says that means good luck for hunters.",
+    "Quiet streets, loud stars. Perfect night to hang out at the clubhouse.",
+    "Storm clouds rolling in from the east — patrol in pairs tonight.",
+    "The alley cats are on edge. Something's brewing near the arcade."
+  ];
+
+  // ---------------- STUDY HALL content (grades 1-5) ----------------
+  function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+  function shuffleArray(arr){
+    for(var i=arr.length-1;i>0;i--){
+      var j = Math.floor(Math.random()*(i+1));
+      var t = arr[i]; arr[i]=arr[j]; arr[j]=t;
+    }
+    return arr;
+  }
+
+  // Shared twinkling starfield — cheap atmospheric depth cue reused across
+  // every canvas game's background, so the "night patrol" world feels continuous.
+  function makeStarfield(n, W, bandH){
+    var stars = [];
+    for(var i=0;i<n;i++){
+      stars.push({
+        x: Math.random()*W,
+        y: Math.random()*bandH,
+        r: 0.6 + Math.random()*1.3,
+        phase: Math.random()*Math.PI*2,
+        speed: 0.4 + Math.random()*1.1
+      });
+    }
+    return stars;
+  }
+  function drawStarfield(ctx, stars, ts){
+    ctx.save();
+    ctx.fillStyle = '#F5EFFF';
+    for(var i=0;i<stars.length;i++){
+      var s = stars[i];
+      ctx.globalAlpha = Math.max(0.12, 0.3 + 0.35*Math.sin(ts*0.001*s.speed + s.phase));
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  function buildNumericChoices(answer){
+    var set = [answer];
+    var guard = 0;
+    while(set.length<4 && guard<40){
+      guard++;
+      var offset = (Math.floor(Math.random()*9)+1) * (Math.random()<0.5?-1:1);
+      var val = answer+offset;
+      if(val>=0 && set.indexOf(val)===-1) set.push(val);
+    }
+    return shuffleArray(set).map(String);
+  }
+  function generateMathQuestion(grade){
+    var a,b,answer,q,mode;
+    if(grade<=1){
+      a=randInt(1,10); b=randInt(1,10);
+      if(a<b){ var t=a; a=b; b=t; }
+      if(Math.random()<0.5){ answer=a+b; q=a+' + '+b+' = ?'; }
+      else { answer=a-b; q=a+' − '+b+' = ?'; }
+    } else if(grade===2){
+      a=randInt(10,60); b=randInt(5,40);
+      if(a<b){ var t2=a; a=b; b=t2; }
+      if(Math.random()<0.5){ answer=a+b; q=a+' + '+b+' = ?'; }
+      else { answer=a-b; q=a+' − '+b+' = ?'; }
+    } else if(grade===3){
+      if(Math.random()<0.6){ a=randInt(2,10); b=randInt(2,10); answer=a*b; q=a+' × '+b+' = ?'; }
+      else { a=randInt(100,500); b=randInt(50,300); answer=a+b; q=a+' + '+b+' = ?'; }
+    } else if(grade===4){
+      mode = Math.random();
+      if(mode<0.45){ a=randInt(11,25); b=randInt(2,9); answer=a*b; q=a+' × '+b+' = ?'; }
+      else { b=randInt(2,9); answer=randInt(2,12); a=b*answer; q=a+' ÷ '+b+' = ?'; }
+    } else {
+      mode = Math.random();
+      if(mode<0.4){ a=randInt(12,30); b=randInt(11,20); answer=a*b; q=a+' × '+b+' = ?'; }
+      else if(mode<0.75){ b=randInt(3,12); answer=randInt(4,15); a=b*answer; q=a+' ÷ '+b+' = ?'; }
+      else { a=randInt(200,900); b=randInt(150,700); var hi=Math.max(a,b), lo=Math.min(a,b); answer=hi-lo; q=hi+' − '+lo+' = ?'; }
+    }
+    return { q: q, choices: buildNumericChoices(answer), answer: String(answer) };
+  }
+
+  var GRAMMAR_BANK = {
+    1: [
+      {q:"Pick the correctly written sentence.", choices:["the cat is sleeping","The cat is sleeping.","The Cat is sleeping","the cat Is sleeping."], answer:"The cat is sleeping."},
+      {q:"Which word is a noun?", choices:["run","happy","dog","fast"], answer:"dog"},
+      {q:"Which word is a verb?", choices:["jump","blue","chair","slow"], answer:"jump"},
+      {q:"Which ending punctuation fits: \"Do you like ice cream\"", choices:[".","?","!",","], answer:"?"},
+      {q:"What is the plural of \"cat\"?", choices:["cats","cates","cat's","caties"], answer:"cats"}
+    ],
+    2: [
+      {q:"Which word is spelled correctly?", choices:["frend","friend","freind","frind"], answer:"friend"},
+      {q:"Choose the past-tense verb: \"Yesterday I ___ to the park.\"", choices:["go","goes","went","going"], answer:"went"},
+      {q:"Which word is an adjective in \"The big dog barked\"?", choices:["big","dog","barked","The"], answer:"big"},
+      {q:"Which sentence uses \"their\" correctly?", choices:["Their going home.","They put their shoes on.","Their is a cat.","Their happy today."], answer:"They put their shoes on."},
+      {q:"What is the plural of \"box\"?", choices:["boxs","boxes","box's","boxxes"], answer:"boxes"}
+    ],
+    3: [
+      {q:"Which word is an adverb in \"She sang loudly\"?", choices:["She","sang","loudly","song"], answer:"loudly"},
+      {q:"Choose the correct word: \"I saw ___ deer in the woods.\"", choices:["to","too","two","tew"], answer:"two"},
+      {q:"Which sentence is a question?", choices:["The sun is bright.","Close the door.","Why is the sky blue?","I like pizza."], answer:"Why is the sky blue?"},
+      {q:"What is the plural of \"child\"?", choices:["childs","childes","children","childrens"], answer:"children"},
+      {q:"Which word means the opposite of \"happy\"?", choices:["glad","sad","joyful","excited"], answer:"sad"}
+    ],
+    4: [
+      {q:"Choose the sentence with correct subject-verb agreement.", choices:["The dogs runs fast.","The dogs run fast.","The dog run fast.","The dog running fast."], answer:"The dogs run fast."},
+      {q:"Which word is a conjunction in \"I wanted to go, but it rained\"?", choices:["wanted","but","rained","go"], answer:"but"},
+      {q:"Choose the correctly punctuated sentence.", choices:["Lets eat Grandma!","Let's eat, Grandma!","Lets eat, grandma","Let's eat Grandma"], answer:"Let's eat, Grandma!"},
+      {q:"Which is a synonym for \"quick\"?", choices:["slow","fast","tired","quiet"], answer:"fast"},
+      {q:"Identify the pronoun in \"She gave the book to him.\"", choices:["book","gave","She","to"], answer:"She"}
+    ],
+    5: [
+      {q:"Which sentence uses correct capitalization?", choices:["We visited paris in june.","We visited Paris in June.","we visited Paris in june.","We Visited Paris In June."], answer:"We visited Paris in June."},
+      {q:"Which shows the correct possessive for one dog owning a bone?", choices:["dogs bone","dog's bone","dogs' bone","dog's' bone"], answer:"dog's bone"},
+      {q:"Which word is an adverb?", choices:["quickly","quick","quickness","quicken"], answer:"quickly"},
+      {q:"Choose the sentence free of run-on errors.", choices:["I like dogs I like cats too.","I like dogs, and I like cats too.","I like dogs and cats I like them.","I like, dogs and cats."], answer:"I like dogs, and I like cats too."},
+      {q:"What type of sentence is \"Watch out for that puddle!\"?", choices:["Declarative","Interrogative","Exclamatory","Imperative"], answer:"Exclamatory"}
+    ]
+  };
+
+  var READING_BANK = {
+    1: [
+      {passage:"Max is a little dog. He likes to play with a red ball. Max runs fast in the park.", q:"What does Max like to play with?", choices:["A red ball","A blue box","A cat","A bike"], answer:"A red ball"},
+      {passage:"Lily has a pet fish. The fish is orange. It swims in a round bowl.", q:"What color is Lily's fish?", choices:["Blue","Orange","Green","Purple"], answer:"Orange"},
+      {passage:"It is raining outside. Sam puts on his yellow boots. He jumps in the puddles.", q:"What color are Sam's boots?", choices:["Red","Green","Yellow","Black"], answer:"Yellow"}
+    ],
+    2: [
+      {passage:"The Lanternboys light up the alley every night. Hae carries the biggest lantern. Bit hums a happy tune while he walks.", q:"Who carries the biggest lantern?", choices:["Bit","Nun","Hae","Sam"], answer:"Hae"},
+      {passage:"A caterpillar eats leaves all day long. After many weeks, it makes a small case called a cocoon. Later, it comes out as a butterfly.", q:"What does a caterpillar turn into?", choices:["A moth","A butterfly","A bird","A bee"], answer:"A butterfly"},
+      {passage:"Every morning, the baker makes fresh bread. The smell fills the whole street. People line up early to buy a warm loaf.", q:"What does the baker make?", choices:["Fresh bread","Cold pizza","Ice cream","Soup"], answer:"Fresh bread"}
+    ],
+    3: [
+      {passage:"Gloomlings are small, shy creatures that only come out at night. They are not really mean — they just like to float around and look for quiet places to rest. A gentle tap of light is enough to send them home.", q:"Why do Gloomlings float around at night?", choices:["To scare people","To look for quiet places to rest","To eat leaves","To find their lanterns"], answer:"To look for quiet places to rest"},
+      {passage:"The desert is very dry, but some animals still live there. Camels can go many days without water. Their humps store fat, not water, which helps them survive long trips.", q:"What do a camel's humps store?", choices:["Water","Fat","Sand","Air"], answer:"Fat"},
+      {passage:"Long ago, people used the stars to find their way at night. Sailors would look for the North Star because it always points north. This helped ships travel safely across the ocean.", q:"Why did sailors look for the North Star?", choices:["It was the brightest star","It always points north","It changes color","It was closest to the moon"], answer:"It always points north"}
+    ],
+    4: [
+      {passage:"Recycling helps the Earth in many ways. When we recycle paper, fewer trees need to be cut down. When we recycle metal and plastic, less new material has to be dug up or made. Small actions, like rinsing out a can, can make a big difference over time.", q:"What is one benefit of recycling paper?", choices:["It makes paper shinier","Fewer trees need to be cut down","It creates more plastic","It uses more water"], answer:"Fewer trees need to be cut down"},
+      {passage:"Music has a strange power over memory. Scientists have found that hearing a song from years ago can bring back memories of exactly where you were and how you felt. This is one reason old favorite songs feel emotional.", q:"Why might an old song make someone feel emotional?", choices:["Songs are always sad","It can bring back old memories","Radios are broken","People forget the words"], answer:"It can bring back old memories"},
+      {passage:"Before refrigerators existed, people used ice houses to keep food cold. Blocks of ice were cut from frozen lakes in winter and stored underground, packed in sawdust to keep them from melting.", q:"What was used to keep the ice blocks from melting?", choices:["Sawdust","Salt water","Sunlight","Plastic wrap"], answer:"Sawdust"}
+    ],
+    5: [
+      {passage:"The human body is made up of trillions of cells, each with its own job. Red blood cells carry oxygen throughout the body, while white blood cells fight off germs. Together, these tiny cells keep the whole body running.", q:"What is the main idea of this passage?", choices:["Cells are too small to matter","Different cells have different jobs that keep the body running","White blood cells are stronger than red ones","Microscopes were invented recently"], answer:"Different cells have different jobs that keep the body running"},
+      {passage:"In 1969, astronauts landed on the Moon for the first time. It took years of planning, powerful rockets, and brave crews willing to take the risk. The success of that mission showed what people could achieve by working toward a shared goal.", q:"What helped make the Moon landing possible?", choices:["Luck alone","Years of planning and teamwork","A single scientist working alone","Modern smartphones"], answer:"Years of planning and teamwork"},
+      {passage:"Not all storms are dangerous, but some can be. A thunderstorm becomes severe when it produces large hail, strong winds, or a tornado. Meteorologists study weather patterns closely so they can warn people before a severe storm arrives.", q:"Why do meteorologists study weather patterns?", choices:["To predict sports scores","To warn people before severe storms arrive","To make storms stronger","To control the weather"], answer:"To warn people before severe storms arrive"}
+    ]
+  };
+
+  // ---------------- VECTOR ART ENGINE (smooth flat-illustration sprites, canvas-drawn) ----------------
+  function hexToInt(str){ return parseInt(str.replace('#',''), 16); }
+  function darken(hex, factor){
+    var r = Math.round(((hex>>16)&0xff) * factor);
+    var g = Math.round(((hex>>8)&0xff) * factor);
+    var b = Math.round((hex&0xff) * factor);
+    return (r<<16)|(g<<8)|b;
+  }
+  function toCss(hexInt){ return '#' + ((hexInt>>>0) & 0xFFFFFF).toString(16).padStart(6,'0'); }
+  function toRgba(hex, alpha){
+    var v = hexToInt(hex);
+    return 'rgba('+((v>>16)&0xff)+','+((v>>8)&0xff)+','+(v&0xff)+','+alpha+')';
+  }
+
+  function drawWeapon(ctx, handX, handY, weaponType, weaponGlow){
+    if(weaponType==='blade'){
+      // hilt
+      ctx.strokeStyle = '#170F2E'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(handX-1, handY+2); ctx.lineTo(handX+2, handY-16); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(handX-6, handY-15); ctx.lineTo(handX+10, handY-17); ctx.stroke();
+      // glowing energy blade
+      var bladeGrad = ctx.createLinearGradient(handX, handY-18, handX+8, handY-80);
+      bladeGrad.addColorStop(0, weaponGlow);
+      bladeGrad.addColorStop(1, '#FFFFFF');
+      ctx.fillStyle = bladeGrad;
+      ctx.beginPath();
+      ctx.moveTo(handX-3, handY-17);
+      ctx.lineTo(handX+4, handY-80);
+      ctx.lineTo(handX+11, handY-18);
+      ctx.closePath();
+      ctx.fill();
+      var glow = ctx.createRadialGradient(handX+4, handY-48, 2, handX+4, handY-48, 26);
+      glow.addColorStop(0, toRgba(weaponGlow, 0.5));
+      glow.addColorStop(1, toRgba(weaponGlow, 0));
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(handX+4, handY-48, 26, 0, Math.PI*2); ctx.fill();
+    } else if(weaponType==='fan'){
+      ctx.save();
+      ctx.translate(handX+2, handY-6);
+      ctx.rotate(-0.35);
+      for(var i=-2;i<=2;i++){
+        ctx.save();
+        ctx.rotate(i*0.22);
+        var fanGrad = ctx.createLinearGradient(0,0,0,-52);
+        fanGrad.addColorStop(0, weaponGlow);
+        fanGrad.addColorStop(1, '#FFFFFF');
+        ctx.fillStyle = fanGrad;
+        ctx.globalAlpha = 0.88;
+        ctx.beginPath();
+        ctx.moveTo(-3,0); ctx.lineTo(3,0); ctx.lineTo(5,-50); ctx.lineTo(-5,-50);
+        ctx.closePath(); ctx.fill();
+        ctx.restore();
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#170F2E';
+      ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+      var glow2 = ctx.createRadialGradient(handX-4, handY-44, 2, handX-4, handY-44, 30);
+      glow2.addColorStop(0, toRgba(weaponGlow, 0.35));
+      glow2.addColorStop(1, toRgba(weaponGlow, 0));
+      ctx.fillStyle = glow2;
+      ctx.beginPath(); ctx.arc(handX-4, handY-44, 30, 0, Math.PI*2); ctx.fill();
+    } else {
+      // baton / glowstick (default)
+      ctx.strokeStyle = '#170F2E'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(handX, handY); ctx.lineTo(handX+4, handY-36); ctx.stroke();
+      var glow3 = ctx.createRadialGradient(handX+4, handY-42, 1, handX+4, handY-42, 13);
+      glow3.addColorStop(0, '#FFFFFF'); glow3.addColorStop(0.45, weaponGlow); glow3.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = glow3;
+      ctx.beginPath(); ctx.arc(handX+4, handY-42, 13, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  function drawHairBob(ctx, cx, headCy, color){
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.ellipse(cx, headCy-10, 32, 30, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx-5, headCy-34, 8, 9, -0.3, 0, Math.PI*2); ctx.fill();
+  }
+  function drawHairTwintails(ctx, cx, headCy, color){
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.ellipse(cx, headCy-11, 29, 26, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx-36, headCy+22, 9, 30, 0.15, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+36, headCy+22, 9, 30, -0.15, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#FF5FA2';
+    ctx.beginPath(); ctx.arc(cx-36, headCy-4, 4.3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+36, headCy-4, 4.3, 0, Math.PI*2); ctx.fill();
+  }
+  function drawHairPonytail(ctx, cx, headCy, color){
+    ctx.fillStyle = color;
+    // sleek crown swept back off the face
+    ctx.beginPath(); ctx.ellipse(cx, headCy-12, 28, 25, 0, 0, Math.PI*2); ctx.fill();
+    // side-swept fringe
+    ctx.beginPath();
+    ctx.moveTo(cx-25, headCy-16);
+    ctx.quadraticCurveTo(cx-8, headCy-30, cx+10, headCy-22);
+    ctx.quadraticCurveTo(cx-6, headCy-12, cx-24, headCy-4);
+    ctx.closePath(); ctx.fill();
+    // high ponytail sweeping down past the shoulder
+    ctx.beginPath();
+    ctx.moveTo(cx+16, headCy-30);
+    ctx.quadraticCurveTo(cx+46, headCy-8, cx+40, headCy+42);
+    ctx.quadraticCurveTo(cx+34, headCy+72, cx+21, headCy+64);
+    ctx.quadraticCurveTo(cx+30, headCy+30, cx+18, headCy-8);
+    ctx.closePath(); ctx.fill();
+    // hair tie
+    ctx.fillStyle = 'rgba(0,0,0,.32)';
+    ctx.beginPath(); ctx.ellipse(cx+18, headCy-27, 5, 3.5, 0.35, 0, Math.PI*2); ctx.fill();
+  }
+
+  function drawHairUndercut(ctx, cx, headCy, color){
+    ctx.fillStyle = color;
+    // full sleek coverage on the left/back
+    ctx.beginPath();
+    ctx.moveTo(cx-30, headCy+8);
+    ctx.quadraticCurveTo(cx-35, headCy-28, cx-4, headCy-34);
+    ctx.quadraticCurveTo(cx+16, headCy-32, cx+15, headCy-16);
+    ctx.quadraticCurveTo(cx+1, headCy-21, cx-9, headCy-8);
+    ctx.quadraticCurveTo(cx-4, headCy+6, cx-16, headCy+15);
+    ctx.closePath(); ctx.fill();
+    // thin shaved sliver on the right side
+    ctx.fillStyle = toCss(darken(hexToInt(color), 0.5));
+    ctx.beginPath(); ctx.ellipse(cx+15, headCy-6, 6, 15, 0.15, 0, Math.PI*2); ctx.fill();
+    // sharp side-swept fringe over one eye
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(cx-9, headCy-20);
+    ctx.quadraticCurveTo(cx+5, headCy-14, cx+1, headCy+2);
+    ctx.quadraticCurveTo(cx-9, headCy-4, cx-15, headCy-14);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawHairBuns(ctx, cx, headCy, color){
+    ctx.fillStyle = color;
+    // short face-framing base
+    ctx.beginPath(); ctx.ellipse(cx, headCy-8, 27, 21, 0, 0, Math.PI*2); ctx.fill();
+    // twin space buns
+    [-1,1].forEach(function(s){
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(cx+s*22, headCy-30, 10, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,.25)';
+      ctx.beginPath(); ctx.ellipse(cx+s*22, headCy-24, 5, 2.4, 0, 0, Math.PI*2); ctx.fill();
+    });
+    // short flicked tails at jaw level
+    [-1,1].forEach(function(s){
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(cx+s*24, headCy+4);
+      ctx.quadraticCurveTo(cx+s*34, headCy+16, cx+s*26, headCy+27);
+      ctx.quadraticCurveTo(cx+s*19, headCy+14, cx+s*17, headCy+4);
+      ctx.closePath(); ctx.fill();
+    });
+  }
+
+  var HAIR_DRAWERS = {
+    bob: drawHairBob,
+    twintails: drawHairTwintails,
+    ponytail: drawHairPonytail,
+    undercut: drawHairUndercut,
+    buns: drawHairBuns
+  };
+
+  function drawHeadwear(ctx, cx, headCy, id){
+    if(id==='bow'){
+      ctx.fillStyle = '#FF5FA2';
+      ctx.beginPath(); ctx.moveTo(cx+16,headCy-22); ctx.lineTo(cx+29,headCy-32); ctx.lineTo(cx+29,headCy-14); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cx+16,headCy-22); ctx.lineTo(cx+3,headCy-32); ctx.lineTo(cx+3,headCy-14); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#C93E7D';
+      ctx.beginPath(); ctx.arc(cx+16,headCy-22,4.5,0,Math.PI*2); ctx.fill();
+    } else if(id==='star-clip'){
+      ctx.fillStyle = '#FFC15E';
+      ctx.save(); ctx.translate(cx+19,headCy-24);
+      for(var i=0;i<4;i++){
+        ctx.rotate(Math.PI/2);
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(2.2,-6); ctx.lineTo(0,-12); ctx.lineTo(-2.2,-6); ctx.closePath(); ctx.fill();
+      }
+      ctx.restore();
+    } else if(id==='flower-crown'){
+      [-21,-10,0,10,21].forEach(function(dx){
+        var fy = headCy-24 + Math.abs(dx)*0.2;
+        ctx.fillStyle = '#FFFFFF';
+        [0,72,144,216,288].forEach(function(ang){
+          var rad = ang*Math.PI/180;
+          ctx.beginPath(); ctx.arc(cx+dx+Math.cos(rad)*2.8, fy+Math.sin(rad)*2.8, 2.2, 0, Math.PI*2); ctx.fill();
+        });
+        ctx.fillStyle = '#FFC15E';
+        ctx.beginPath(); ctx.arc(cx+dx, fy, 1.7, 0, Math.PI*2); ctx.fill();
+      });
+    } else if(id==='cat-ears'){
+      [-1,1].forEach(function(s){
+        ctx.fillStyle = '#3B2A6B';
+        ctx.beginPath();
+        ctx.moveTo(cx+s*17, headCy-16); ctx.lineTo(cx+s*27, headCy-40); ctx.lineTo(cx+s*7, headCy-28);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#FF9EC4';
+        ctx.beginPath();
+        ctx.moveTo(cx+s*17, headCy-20); ctx.lineTo(cx+s*23, headCy-34); ctx.lineTo(cx+s*11, headCy-28);
+        ctx.closePath(); ctx.fill();
+      });
+    }
+  }
+
+  function drawFaceAcc(ctx, cx, cy, id){
+    if(id==='blush'){
+      ctx.fillStyle = 'rgba(255,95,162,.4)';
+      ctx.beginPath(); ctx.ellipse(cx-20, cy+8, 6, 4, 0, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx+20, cy+8, 6, 4, 0, 0, Math.PI*2); ctx.fill();
+    } else if(id==='glasses'){
+      ctx.strokeStyle = '#170F2E'; ctx.lineWidth = 2.2; ctx.fillStyle = 'rgba(255,255,255,.15)';
+      [-13,13].forEach(function(dx){
+        ctx.beginPath(); ctx.arc(cx+dx, cy, 9, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+      });
+      ctx.beginPath(); ctx.moveTo(cx-4,cy); ctx.lineTo(cx+4,cy); ctx.stroke();
+    } else if(id==='freckles'){
+      ctx.fillStyle = 'rgba(190,120,90,.55)';
+      [[-18,4],[-22,8],[18,4],[22,8],[0,10]].forEach(function(p){
+        ctx.beginPath(); ctx.arc(cx+p[0], cy+p[1], 1.6, 0, Math.PI*2); ctx.fill();
+      });
+    }
+  }
+
+  function renderPlayerVector(hairstyleId, hairColorHex, outfitColor, weaponGlow, headwearId, faceAccId, weaponType){
+    var canvas = document.createElement('canvas');
+    canvas.width = 256; canvas.height = 352;
+    var ctx = canvas.getContext('2d');
+    ctx.scale(2, 2); // render at 2x internal resolution for crisper output at any display size
+    var cx = 64, headCy = 40, headR = 26;
+    var outfitShadow = toCss(darken(hexToInt(outfitColor), 0.62));
+    var shoeColor = '#170F2E';
+
+    function roundRectPath(x, y, w, h, r){
+      if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+      ctx.beginPath();
+      ctx.moveTo(x+r, y);
+      ctx.arcTo(x+w, y, x+w, y+h, r);
+      ctx.arcTo(x+w, y+h, x, y+h, r);
+      ctx.arcTo(x, y+h, x, y, r);
+      ctx.arcTo(x, y, x+w, y, r);
+      ctx.closePath();
+    }
+
+    // ground shadow (grounds her in the frame)
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    ctx.beginPath(); ctx.ellipse(cx, 159, 22, 5, 0, 0, Math.PI*2); ctx.fill();
+
+    // magic circle glow beneath her feet — her weapon's energy pooling on the ground
+    var circleGlow = ctx.createRadialGradient(cx, 156, 2, cx, 156, 32);
+    circleGlow.addColorStop(0, toRgba(weaponGlow, 0.38));
+    circleGlow.addColorStop(1, toRgba(weaponGlow, 0));
+    ctx.fillStyle = circleGlow;
+    ctx.beginPath(); ctx.ellipse(cx, 156, 32, 9, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = toRgba(weaponGlow, 0.55); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(cx, 156, 24, 6.5, 0, 0, Math.PI*2); ctx.stroke();
+
+    // cape — flowing behind her, swept to one side
+    ctx.save();
+    ctx.fillStyle = outfitShadow;
+    ctx.globalAlpha = 0.92;
+    ctx.beginPath();
+    ctx.moveTo(cx-19, 67);
+    ctx.quadraticCurveTo(cx-38, 96, cx-31, 140);
+    ctx.quadraticCurveTo(cx-16, 150, cx-2, 140);
+    ctx.quadraticCurveTo(cx-10, 100, cx-2, 68);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = toRgba(weaponGlow, 0.65); ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(cx-31, 140); ctx.quadraticCurveTo(cx-16, 150, cx-2, 140);
+    ctx.stroke();
+    ctx.restore();
+
+    // legs
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.28)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
+    ctx.fillStyle = outfitShadow;
+    roundRectPath(cx-16, 106, 13, 32, 6); ctx.fill();
+    roundRectPath(cx+3, 106, 13, 32, 6); ctx.fill();
+    ctx.restore();
+
+    // feet (tall boots with a glowing cuff, drawn over the leg base)
+    ctx.fillStyle = shoeColor;
+    ctx.beginPath(); ctx.ellipse(cx-9, 152, 9, 6, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+9, 152, 9, 6, 0, 0, Math.PI*2); ctx.fill();
+    roundRectPath(cx-16, 132, 13, 22, 4); ctx.fill();
+    roundRectPath(cx+3, 132, 13, 22, 4); ctx.fill();
+    ctx.strokeStyle = toRgba(weaponGlow, 0.7); ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(cx-16, 134); ctx.lineTo(cx-3, 134); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+3, 134); ctx.lineTo(cx+16, 134); ctx.stroke();
+
+    // torso
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 5;
+    var bodyGrad = ctx.createLinearGradient(cx-23, 64, cx+23, 112);
+    bodyGrad.addColorStop(0, '#FFFFFF');
+    bodyGrad.addColorStop(0.16, outfitColor);
+    bodyGrad.addColorStop(1, outfitShadow);
+    ctx.fillStyle = bodyGrad;
+    roundRectPath(cx-23, 64, 46, 48, 16);
+    ctx.fill();
+    ctx.restore();
+    // belt accent with a small glowing buckle gem
+    ctx.fillStyle = 'rgba(0,0,0,.22)';
+    ctx.fillRect(cx-23, 104, 46, 6);
+    var buckleGlow = ctx.createRadialGradient(cx, 107, 0, cx, 107, 5);
+    buckleGlow.addColorStop(0, '#FFFFFF'); buckleGlow.addColorStop(0.4, weaponGlow); buckleGlow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = buckleGlow;
+    ctx.beginPath(); ctx.arc(cx, 107, 5, 0, Math.PI*2); ctx.fill();
+    // glowing trim piping down each side of the torso
+    ctx.strokeStyle = toRgba(weaponGlow, 0.75); ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx-19, 70); ctx.lineTo(cx-19, 102); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+19, 70); ctx.lineTo(cx+19, 102); ctx.stroke();
+    // chest emblem — a small glowing gem at the collarbone
+    var chestGlow = ctx.createRadialGradient(cx, 74, 0, cx, 74, 7);
+    chestGlow.addColorStop(0, '#FFFFFF'); chestGlow.addColorStop(0.35, weaponGlow); chestGlow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = chestGlow;
+    ctx.beginPath(); ctx.arc(cx, 74, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = weaponGlow;
+    ctx.save(); ctx.translate(cx, 74); ctx.rotate(Math.PI/4);
+    ctx.fillRect(-3, -3, 6, 6);
+    ctx.restore();
+
+    // weapon (shape varies by weaponType: baton / blade / fan)
+    drawWeapon(ctx, cx+30, 96, weaponType, weaponGlow);
+
+    // arms + hands (right hand grips the lightstick)
+    ctx.strokeStyle = outfitColor; ctx.lineWidth = 12; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx-22, 70); ctx.quadraticCurveTo(cx-36, 86, cx-28, 104); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+22, 70); ctx.quadraticCurveTo(cx+34, 82, cx+29, 92); ctx.stroke();
+    ctx.fillStyle = '#FFDCC2';
+    ctx.beginPath(); ctx.arc(cx-28, 105, 6.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+29, 93, 6.5, 0, Math.PI*2); ctx.fill();
+
+    // pauldrons — small armored shoulder plates with a gem inset
+    [-1, 1].forEach(function(s){
+      var px = cx+s*22, py = 68;
+      var padGrad = ctx.createRadialGradient(px-s*2, py-2, 1, px, py, 8);
+      padGrad.addColorStop(0, '#FFFFFF');
+      padGrad.addColorStop(0.5, outfitColor);
+      padGrad.addColorStop(1, outfitShadow);
+      ctx.fillStyle = padGrad;
+      ctx.beginPath(); ctx.ellipse(px, py, 7.5, 6, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = weaponGlow;
+      ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI*2); ctx.fill();
+    });
+
+    // neck + choker
+    ctx.fillStyle = '#F5D2B8';
+    ctx.beginPath(); ctx.ellipse(cx, 62, 8, 7, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = toRgba(weaponGlow, 0.8); ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(cx, 60, 7, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+
+    // hair (back layer)
+    (HAIR_DRAWERS[hairstyleId] || HAIR_DRAWERS.bob)(ctx, cx, headCy, hairColorHex);
+
+    // hair shine — soft highlight so the hair reads glossy, not flat
+    var hairShine = ctx.createRadialGradient(cx-10, headCy-27, 0, cx-10, headCy-27, 10);
+    hairShine.addColorStop(0, 'rgba(255,255,255,.35)');
+    hairShine.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = hairShine;
+    ctx.beginPath(); ctx.arc(cx-10, headCy-27, 10, 0, Math.PI*2); ctx.fill();
+
+    // head
+    var headGrad = ctx.createRadialGradient(cx-11, headCy-6, 4, cx, headCy, headR+4);
+    headGrad.addColorStop(0, '#FFF0E0'); headGrad.addColorStop(1, '#FFDCC2');
+    ctx.fillStyle = headGrad;
+    ctx.beginPath(); ctx.arc(cx, headCy, headR, 0, Math.PI*2); ctx.fill();
+    // subtle cheek/jaw contour shading for a less flat face
+    ctx.fillStyle = 'rgba(200,130,110,.10)';
+    ctx.beginPath(); ctx.ellipse(cx+14, headCy+10, 9, 12, 0.3, 0, Math.PI*2); ctx.fill();
+
+    // eyebrows
+    ctx.strokeStyle = toCss(darken(hexToInt(hairColorHex), 0.5));
+    ctx.lineWidth = 2; ctx.lineCap = 'round';
+    [-11, 11].forEach(function(dx){
+      ctx.beginPath();
+      ctx.moveTo(cx+dx-5, headCy-8); ctx.quadraticCurveTo(cx+dx, headCy-11, cx+dx+5, headCy-9);
+      ctx.stroke();
+    });
+
+    // eyeshadow wash — a wing of color above each eye, tinted by her weapon's energy
+    ctx.fillStyle = toRgba(weaponGlow, 0.32);
+    [-11, 11].forEach(function(dx, i){
+      var dir = i===0 ? -1 : 1;
+      ctx.beginPath();
+      ctx.moveTo(cx+dx-4, headCy-1);
+      ctx.quadraticCurveTo(cx+dx, headCy-7, cx+dx+dir*13, headCy-4.5);
+      ctx.quadraticCurveTo(cx+dx+dir*4, headCy-1.5, cx+dx+4, headCy+1.5);
+      ctx.closePath(); ctx.fill();
+    });
+
+    // eyes — with a glowing iris ring tinted by her weapon's energy
+    [-11, 11].forEach(function(dx){
+      ctx.fillStyle = weaponGlow;
+      ctx.beginPath(); ctx.arc(cx+dx, headCy, 4.1, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#241A2E';
+      ctx.beginPath(); ctx.arc(cx+dx, headCy, 3, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(cx+dx-1.1, headCy-1.4, 1.15, 0, Math.PI*2); ctx.fill();
+    });
+
+    // winged eyeliner — bold demon-hunter flick at the outer corner of each eye
+    ctx.strokeStyle = '#1A1226'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+    [-11, 11].forEach(function(dx, i){
+      var dir = i===0 ? -1 : 1;
+      ctx.beginPath();
+      ctx.moveTo(cx+dx+dir*3, headCy-2.5);
+      ctx.quadraticCurveTo(cx+dx+dir*10, headCy-6.5, cx+dx+dir*15, headCy-3.5);
+      ctx.stroke();
+    });
+    // lower lash flick
+    ctx.lineWidth = 1.4;
+    [-11, 11].forEach(function(dx, i){
+      var dir = i===0 ? -1 : 1;
+      ctx.beginPath();
+      ctx.moveTo(cx+dx-2, headCy+3);
+      ctx.quadraticCurveTo(cx+dx+dir*4, headCy+5, cx+dx+dir*7, headCy+3.5);
+      ctx.stroke();
+    });
+
+    // glowing hunter mark — her weapon's energy shows as a faint crescent under one eye
+    var markGlow = ctx.createRadialGradient(cx+17, headCy+9, 0, cx+17, headCy+9, 7);
+    markGlow.addColorStop(0, weaponGlow);
+    markGlow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = markGlow;
+    ctx.beginPath(); ctx.arc(cx+17, headCy+9, 7, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = weaponGlow; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx+17, headCy+11, 4, Math.PI*1.1, Math.PI*1.9); ctx.stroke();
+
+    // soft baseline blush (subtler than the blush accessory)
+    ctx.fillStyle = 'rgba(255,150,170,.18)';
+    [-17, 17].forEach(function(dx){
+      ctx.beginPath(); ctx.ellipse(cx+dx, headCy+3, 6, 3.5, 0, 0, Math.PI*2); ctx.fill();
+    });
+
+    // smile — glossier lip tone
+    ctx.strokeStyle = '#E0637E'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx, headCy+6, 6, 0.2*Math.PI, 0.8*Math.PI); ctx.stroke();
+
+    // accessories (on top of everything)
+    drawHeadwear(ctx, cx, headCy, headwearId);
+    drawFaceAcc(ctx, cx, headCy, faceAccId);
+
+    // ambient sparkles drifting off her weapon — the final fantasy flourish
+    ctx.fillStyle = '#FFFFFF';
+    [[cx+44, 42, 2], [cx+18, 30, 1.3], [cx+50, 66, 1.5]].forEach(function(p){
+      ctx.save();
+      ctx.translate(p[0], p[1]);
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(0, -p[2]*2.4); ctx.lineTo(p[2]*0.7, -p[2]*0.4);
+      ctx.lineTo(p[2]*2.4, 0); ctx.lineTo(p[2]*0.7, p[2]*0.4);
+      ctx.lineTo(0, p[2]*2.4); ctx.lineTo(-p[2]*0.7, p[2]*0.4);
+      ctx.lineTo(-p[2]*2.4, 0); ctx.lineTo(-p[2]*0.7, -p[2]*0.4);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+    ctx.globalAlpha = 1;
+
+    return canvas;
+  }
+
+  function renderGloomlingVector(bodyColor){
+    var canvas = document.createElement('canvas');
+    canvas.width = 96; canvas.height = 96;
+    var ctx = canvas.getContext('2d');
+    var cx = 48, cy = 46;
+    var shadow = toCss(darken(hexToInt(bodyColor), 0.65));
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 4;
+    var grad = ctx.createRadialGradient(cx-10, cy-14, 4, cx, cy, 40);
+    grad.addColorStop(0, '#FFFFFF'); grad.addColorStop(0.18, bodyColor); grad.addColorStop(1, shadow);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 34, Math.PI, 0, false);
+    ctx.lineTo(cx+34, cy+18);
+    ctx.quadraticCurveTo(cx+22, cy+34, cx+11, cy+18);
+    ctx.quadraticCurveTo(cx, cy+34, cx-11, cy+18);
+    ctx.quadraticCurveTo(cx-22, cy+34, cx-34, cy+18);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    [-11, 11].forEach(function(dx){
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.ellipse(cx+dx, cy-2, 7, 8, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#241A2E';
+      ctx.beginPath(); ctx.arc(cx+dx, cy, 3.4, 0, Math.PI*2); ctx.fill();
+    });
+
+    return canvas;
+  }
+
+  function renderBossVector(){
+    var canvas = document.createElement('canvas');
+    canvas.width = 140; canvas.height = 140;
+    var ctx = canvas.getContext('2d');
+    var cx = 70, cy = 68;
+    var bodyColor = '#7C3AED', shadow = toCss(darken(hexToInt(bodyColor), 0.6));
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 6;
+    var grad = ctx.createRadialGradient(cx-14, cy-18, 6, cx, cy, 56);
+    grad.addColorStop(0, '#B79CFF'); grad.addColorStop(0.35, bodyColor); grad.addColorStop(1, shadow);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 48, Math.PI, 0, false);
+    ctx.lineTo(cx+48, cy+26);
+    ctx.quadraticCurveTo(cx+30, cy+48, cx+15, cy+26);
+    ctx.quadraticCurveTo(cx, cy+48, cx-15, cy+26);
+    ctx.quadraticCurveTo(cx-30, cy+48, cx-48, cy+26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = '#FFC15E';
+    ctx.beginPath();
+    ctx.moveTo(cx-26, cy-46); ctx.lineTo(cx-26, cy-62);
+    ctx.lineTo(cx-13, cy-46); ctx.lineTo(cx, cy-64);
+    ctx.lineTo(cx+13, cy-46); ctx.lineTo(cx+26, cy-62);
+    ctx.lineTo(cx+26, cy-46);
+    ctx.closePath(); ctx.fill();
+    [-13, 0, 13].forEach(function(dx){
+      ctx.fillStyle = '#FF5FA2';
+      ctx.beginPath(); ctx.arc(cx+dx, cy-50, 3.2, 0, Math.PI*2); ctx.fill();
+    });
+
+    [-16, 16].forEach(function(dx, i){
+      ctx.save();
+      ctx.translate(cx+dx, cy-4);
+      ctx.rotate(i===0 ? -0.25 : 0.25);
+      ctx.fillStyle = '#FF5FA2';
+      ctx.beginPath(); ctx.ellipse(0, 0, 9, 6, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#241A2E';
+      ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    });
+
+    return canvas;
+  }
+
+  function renderLanternVector(boyColor){
+    var canvas = document.createElement('canvas');
+    canvas.width = 112; canvas.height = 128;
+    var ctx = canvas.getContext('2d');
+    var cx = 56, cy = 66;
+    var shadow = toCss(darken(hexToInt(boyColor), 0.6));
+
+    ctx.strokeStyle = '#170F2E'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx, 6); ctx.lineTo(cx, 20); ctx.stroke();
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 5;
+    ctx.fillStyle = '#170F2E';
+    ctx.beginPath(); ctx.ellipse(cx, 22, 14, 7, 0, 0, Math.PI*2); ctx.fill();
+
+    var grad = ctx.createRadialGradient(cx-14, cy-20, 6, cx, cy, 48);
+    grad.addColorStop(0, '#FFFFFF'); grad.addColorStop(0.2, boyColor); grad.addColorStop(1, shadow);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(cx, cy, 40, 46, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = '#170F2E';
+    ctx.beginPath(); ctx.ellipse(cx, cy+46, 12, 6, 0, 0, Math.PI*2); ctx.fill();
+
+    ctx.strokeStyle = 'rgba(23,15,46,.28)'; ctx.lineWidth = 2;
+    [-22, 0, 22].forEach(function(dy){
+      ctx.beginPath();
+      ctx.moveTo(cx-38, cy+dy*0.6);
+      ctx.quadraticCurveTo(cx, cy+dy*0.6+6, cx+38, cy+dy*0.6);
+      ctx.stroke();
+    });
+
+    [-14, 14].forEach(function(dx){
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.ellipse(cx+dx, cy-6, 6, 7, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#241A2E';
+      ctx.beginPath(); ctx.arc(cx+dx, cy-4, 3, 0, Math.PI*2); ctx.fill();
+    });
+    ctx.strokeStyle = '#241A2E'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx, cy+8, 10, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+
+    return canvas;
+  }
+
+  var spriteCache = {};
+  function getPlayerSprite(outfitId, weaponId, hairstyleId, hairColorId, headwearId, faceAccId){
+    weaponId = weaponId || state.equippedWeapon;
+    hairstyleId = hairstyleId || state.hairstyle;
+    hairColorId = hairColorId || state.hairColor;
+    headwearId = headwearId || state.headwear;
+    faceAccId = faceAccId || state.faceAcc;
+    var key = 'player:'+outfitId+':'+weaponId+':'+hairstyleId+':'+hairColorId+':'+headwearId+':'+faceAccId;
+    if(spriteCache[key]) return spriteCache[key];
+    var o = outfitById(outfitId);
+    var w = weaponById(weaponId);
+    var hc = hairColorById(hairColorId);
+    var canvas = renderPlayerVector(hairstyleId, hc.hex, o.outfit, w.glow, headwearId, faceAccId, w.type);
+    return (spriteCache[key] = canvas);
+  }
+  function getGloomlingSprite(colorHex){
+    var key = 'gloomling:'+colorHex;
+    if(spriteCache[key]) return spriteCache[key];
+    var canvas = renderGloomlingVector(colorHex);
+    return (spriteCache[key] = canvas);
+  }
+  function getBossSprite(){
+    var key = 'boss';
+    if(spriteCache[key]) return spriteCache[key];
+    var canvas = renderBossVector();
+    return (spriteCache[key] = canvas);
+  }
+  function getLanternSprite(boyId){
+    var key = 'lantern:'+boyId;
+    if(spriteCache[key]) return spriteCache[key];
+    var b = boyById(boyId);
+    var canvas = renderLanternVector(b.color);
+    return (spriteCache[key] = canvas);
+  }
+
+  var DEFAULT_STATE = {
+    hunter: null,
+    starPoints: 20,
+    unlocked: ['starter'],
+    equipped: 'starter',
+    affection: {hae:0, bit:0, nun:0},
+    best: {battle:0, rhythm:0, memory:0, brawl:0, catch:0, lantern:0, study:{math:0, grammar:0, reading:0}},
+    soundOn: true,
+    grade: 3,
+    unlockedWeapons: ['glowstick'],
+    equippedWeapon: 'glowstick',
+    totalEarned: 20,
+    hairstyle: 'bob',
+    unlockedHairstyles: ['bob'],
+    hairColor: 'violet',
+    unlockedHairColors: ['violet'],
+    headwear: 'none',
+    unlockedHeadwear: ['none'],
+    faceAcc: 'none',
+    unlockedFaceAcc: ['none']
+  };
+
+  var state = loadState();
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem('glowstickPatrolSave');
+      if(!raw) return JSON.parse(JSON.stringify(DEFAULT_STATE));
+      var parsed = JSON.parse(raw);
+      var merged = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      for(var k in parsed){ merged[k] = parsed[k]; }
+      // backfill nested defaults that may not exist in an older save
+      merged.best = merged.best || {};
+      for(var bk in DEFAULT_STATE.best){
+        if(bk==='study'){
+          merged.best.study = merged.best.study || {};
+          for(var sk in DEFAULT_STATE.best.study){
+            if(typeof merged.best.study[sk] !== 'number') merged.best.study[sk] = 0;
+          }
+        } else if(typeof merged.best[bk] !== 'number'){
+          merged.best[bk] = 0;
+        }
+      }
+      merged.unlockedWeapons = merged.unlockedWeapons || ['glowstick'];
+      merged.equippedWeapon = merged.equippedWeapon || 'glowstick';
+      merged.grade = merged.grade || 3;
+      if(typeof merged.totalEarned !== 'number'){
+        merged.totalEarned = Math.max(merged.starPoints||0, 20);
+      }
+      merged.hairstyle = merged.hairstyle || 'bob';
+      merged.unlockedHairstyles = merged.unlockedHairstyles || ['bob'];
+      merged.hairColor = merged.hairColor || 'violet';
+      merged.unlockedHairColors = merged.unlockedHairColors || ['violet'];
+      merged.headwear = merged.headwear || 'none';
+      merged.unlockedHeadwear = merged.unlockedHeadwear || ['none'];
+      merged.faceAcc = merged.faceAcc || 'none';
+      merged.unlockedFaceAcc = merged.unlockedFaceAcc || ['none'];
+      return merged;
+    }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
+  }
+  function saveState(){
+    try{ localStorage.setItem('glowstickPatrolSave', JSON.stringify(state)); }catch(e){}
+  }
+
+  var XP_PER_LEVEL = 50;
+  function levelForXp(xp){ return Math.floor(xp / XP_PER_LEVEL) + 1; }
+  function earnPoints(amount){
+    var beforeLevel = levelForXp(state.totalEarned);
+    state.starPoints += amount;
+    state.totalEarned += amount;
+    var afterLevel = levelForXp(state.totalEarned);
+    if(afterLevel > beforeLevel){
+      showToast('Level up! Now Level ' + afterLevel);
+      beep(660,.1,'triangle');
+      setTimeout(function(){ beep(880,.16,'triangle'); }, 110);
+    }
+  }
+
+  function outfitById(id){
+    for(var i=0;i<OUTFITS.length;i++){ if(OUTFITS[i].id===id) return OUTFITS[i]; }
+    return OUTFITS[0];
+  }
+  function boyById(id){
+    for(var i=0;i<LANTERNBOYS.length;i++){ if(LANTERNBOYS[i].id===id) return LANTERNBOYS[i]; }
+    return LANTERNBOYS[0];
+  }
+
+  var stageEl = document.getElementById('stage');
+  var pointsEl = document.getElementById('pointsDisplay');
+  var toastEl = document.getElementById('toast');
+  var tabbarEl = document.getElementById('tabbar');
+  var currentScreen = 'home';
+  var activeCleanup = null;
+  var toastTimer = null;
+
+  // Replay a small fade/rise-in whenever the stage's content is swapped —
+  // covers every screen change (tabs, sub-tabs, quiz questions, game-over cards)
+  // without needing to touch each render function individually.
+  var stageObserver = new MutationObserver(function(){
+    stageEl.classList.remove('screen-anim');
+    void stageEl.offsetWidth;
+    stageEl.classList.add('screen-anim');
+  });
+  stageObserver.observe(stageEl, {childList:true});
+
+  // Pointer-driven 3D tilt on cards/tiles — one delegated listener covers every
+  // screen's cards since stage content is swapped wholesale on each render.
+  var TILT_SELECTOR = '.card, .arcade-card, .swatch, .stat, .boy-row, .xp-card';
+  var tiltEl = null;
+  function clearTilt(el){ if(el) el.style.transform = ''; }
+  stageEl.addEventListener('pointermove', function(e){
+    var el = e.target.closest ? e.target.closest(TILT_SELECTOR) : null;
+    if(el !== tiltEl){ clearTilt(tiltEl); tiltEl = el; }
+    if(!el) return;
+    var r = el.getBoundingClientRect();
+    var px = (e.clientX - r.left) / r.width - 0.5;
+    var py = (e.clientY - r.top) / r.height - 0.5;
+    el.style.transform = 'perspective(500px) rotateY(' + (px*12).toFixed(2) + 'deg) rotateX(' + (py*-12).toFixed(2) + 'deg) translateZ(4px)';
+  });
+  stageEl.addEventListener('pointerleave', function(){ clearTilt(tiltEl); tiltEl = null; });
+
+  // ---------------- AUDIO ENGINE (synthesized — no external files) ----------------
+  var audioCtx = null, masterGain = null, musicGain = null, sfxGain = null;
+  var PENTA = [0,2,4,7,9,12,14,16,19,21,24]; // C major pentatonic, two octaves, semitones from C4
+  function noteFreq(semitone){ return 261.63 * Math.pow(2, semitone/12); }
+
+  function ensureAudio(){
+    if(audioCtx) return;
+    try{
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = state.soundOn ? 1 : 0;
+      masterGain.connect(audioCtx.destination);
+      musicGain = audioCtx.createGain();
+      musicGain.gain.value = 0.5;
+      musicGain.connect(masterGain);
+      sfxGain = audioCtx.createGain();
+      sfxGain.gain.value = 0.9;
+      sfxGain.connect(masterGain);
+    }catch(e){}
+  }
+
+  function playNote(freq, dur, type, dest, vol){
+    if(!audioCtx || !dest) return;
+    try{
+      var osc = audioCtx.createOscillator();
+      var g = audioCtx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.value = freq;
+      g.gain.setValueAtTime(vol, audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      osc.connect(g).connect(dest);
+      osc.start();
+      osc.stop(audioCtx.currentTime + dur);
+    }catch(e){}
+  }
+
+  function beep(freq, dur, type){
+    ensureAudio();
+    playNote(freq, dur, type || 'sine', sfxGain, 0.26);
+  }
+
+  function playFanfare(){
+    ensureAudio();
+    var seq = [PENTA[4], PENTA[6], PENTA[8], PENTA[10]];
+    seq.forEach(function(semi, i){
+      setTimeout(function(){ playNote(noteFreq(semi), .38, 'triangle', sfxGain, .3); }, i*110);
+    });
+  }
+
+  var MUSIC = {
+    home: {
+      bpm: 96, stepsPerBeat: 2,
+      melody: [2,null,4,5, 2,null,1,2, 4,null,5,6, 4,2,1,null],
+      bass:   [0,null,null,null, 0,null,null,null, null,null,null,null, 0,null,null,null]
+    },
+    battle: {
+      bpm: 130, stepsPerBeat: 2,
+      melody: [6,5,4,5, 6,8,6,5, 4,5,6,8, 6,5,4,2],
+      bass:   [0,null,0,null, 0,null,0,null, 0,null,0,null, 0,null,0,null]
+    }
+  };
+  var musicTimer = null, musicStep = 0, musicKind = null;
+
+  function playMusicStep(cfg, stepSec){
+    if(!audioCtx) return;
+    var i = musicStep % cfg.melody.length;
+    var mIdx = cfg.melody[i], bIdx = cfg.bass[i];
+    if(mIdx !== null){ playNote(noteFreq(PENTA[mIdx]), stepSec*0.85, 'triangle', musicGain, 0.4); }
+    if(bIdx !== null){ playNote(noteFreq(PENTA[bIdx]-12), stepSec*1.6, 'sine', musicGain, 0.55); }
+    musicStep++;
+  }
+
+  function startMusic(kind){
+    ensureAudio();
+    if(musicKind === kind && musicTimer) return;
+    if(musicTimer){ clearInterval(musicTimer); musicTimer = null; }
+    musicKind = kind;
+    musicStep = 0;
+    var cfg = MUSIC[kind];
+    var stepSec = 60 / cfg.bpm / cfg.stepsPerBeat;
+    playMusicStep(cfg, stepSec);
+    musicTimer = setInterval(function(){ playMusicStep(cfg, stepSec); }, stepSec*1000);
+  }
+
+  function setSoundOn(on){
+    state.soundOn = on;
+    saveState();
+    if(masterGain) masterGain.gain.value = on ? 1 : 0;
+    soundToggleEl.textContent = on ? '🔊' : '🔇';
+  }
+
+  var soundToggleEl = document.getElementById('soundToggle');
+  soundToggleEl.textContent = state.soundOn ? '🔊' : '🔇';
+  soundToggleEl.addEventListener('click', function(){
+    ensureAudio();
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    setSoundOn(!state.soundOn);
+  });
+  document.addEventListener('pointerdown', function firstGesture(){
+    ensureAudio();
+    if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    document.removeEventListener('pointerdown', firstGesture);
+  }, {once:true});
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ toastEl.classList.remove('show'); }, 1800);
+  }
+
+  var levelEl = document.getElementById('levelBadge');
+  function refreshTopbar(){
+    pointsEl.textContent = state.starPoints;
+    levelEl.textContent = 'Lv.' + levelForXp(state.totalEarned);
+  }
+
+  function avatarHTML(outfitId, sizeVar, badgeIcon, weaponId, hairstyleId, headwearId, faceAccId){
+    var o = outfitById(outfitId);
+    var style = '--av:' + (sizeVar||'120px') + ';';
+    var src = getPlayerSprite(outfitId, weaponId, hairstyleId, null, headwearId, faceAccId).toDataURL();
+    return (
+      '<div class="avatar" style="'+style+'">' +
+        '<img class="sprite-img" src="'+src+'" alt="'+o.name+'">' +
+        (badgeIcon!==false ? '<div class="badge">'+o.icon+'</div>' : '') +
+      '</div>'
+    );
+  }
+
+  function setScreen(name){
+    if(activeCleanup){ activeCleanup(); activeCleanup = null; }
+    currentScreen = name;
+    var buttons = tabbarEl.querySelectorAll('.tab-btn');
+    for(var i=0;i<buttons.length;i++){
+      buttons[i].classList.toggle('active', buttons[i].dataset.screen === name);
+    }
+    if(name==='home') renderHome();
+    else if(name==='select-hunter') renderHunterSelect();
+    else if(name==='clubhouse') renderClubhouse('closet');
+    else if(name==='battle') renderBattleHub();
+    else if(name==='arcade') renderArcadeHub();
+    else if(name==='study') renderStudyHub();
+    refreshTopbar();
+    startMusic(name==='battle' || name==='arcade' ? 'battle' : 'home');
+  }
+
+  Array.prototype.forEach.call(tabbarEl.querySelectorAll('.tab-btn'), function(btn){
+    btn.addEventListener('click', function(){
+      beep(700, .05, 'square');
+      setScreen(btn.dataset.screen);
+    });
+  });
+
+  // ---------------- HOME ----------------
+  function renderXpCard(){
+    var level = levelForXp(state.totalEarned);
+    var intoLevel = state.totalEarned % XP_PER_LEVEL;
+    var pct = Math.round((intoLevel / XP_PER_LEVEL) * 100);
+    return (
+      '<div class="xp-card">' +
+        '<div class="xp-head"><span>Trainee Level <b class="tabular">'+level+'</b></span><span class="tabular">'+intoLevel+'/'+XP_PER_LEVEL+' XP</span></div>' +
+        '<div class="xp-bar"><div class="xp-fill" style="width:'+pct+'%"></div></div>' +
+      '</div>'
+    );
+  }
+
+  function renderHunterSelect(){
+    var html =
+      '<div class="eyebrow">Choose Your Hunter</div>' +
+      '<h2 style="margin:2px 0 4px;">Who lights up the alley tonight?</h2>' +
+      '<p style="color:var(--dim); font-size:13px; margin:0 0 12px;">Pick your hunter to start. You can still change her outfit, hair and weapon anytime in the Clubhouse.</p>';
+    HUNTERS.forEach(function(h){
+      var hc = hairColorById(h.hairColor);
+      var o = outfitById(h.outfit);
+      var w = weaponById(h.weapon);
+      var canvas = renderPlayerVector(h.hairstyle, hc.hex, o.outfit, w.glow, 'none', 'none', w.type);
+      html +=
+        '<div class="card" data-hunter="'+h.id+'" style="display:flex; gap:14px; align-items:center; text-align:left; margin-bottom:10px; cursor:pointer;">' +
+          '<img class="sprite-img" style="width:64px;height:88px;flex:none;" src="'+canvas.toDataURL()+'" alt="'+h.name+'">' +
+          '<div>' +
+            '<h3 style="margin:0 0 2px;">'+h.name+' <span style="color:var(--amber); font-size:11px; font-weight:800;">'+h.title+'</span></h3>' +
+            '<p style="margin:0; color:var(--dim); font-size:12.5px;">'+h.tagline+'</p>' +
+          '</div>' +
+        '</div>';
+    });
+    stageEl.innerHTML = html;
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-hunter]'), function(el){
+      el.addEventListener('click', function(){ chooseHunter(el.dataset.hunter); });
+    });
+  }
+
+  function chooseHunter(id){
+    var h = hunterById(id);
+    if(!h) return;
+    state.hunter = id;
+    if(state.unlocked.indexOf(h.outfit)===-1) state.unlocked.push(h.outfit);
+    state.equipped = h.outfit;
+    if(state.unlockedWeapons.indexOf(h.weapon)===-1) state.unlockedWeapons.push(h.weapon);
+    state.equippedWeapon = h.weapon;
+    if(state.unlockedHairstyles.indexOf(h.hairstyle)===-1) state.unlockedHairstyles.push(h.hairstyle);
+    state.hairstyle = h.hairstyle;
+    if(state.unlockedHairColors.indexOf(h.hairColor)===-1) state.unlockedHairColors.push(h.hairColor);
+    state.hairColor = h.hairColor;
+    saveState();
+    showToast('You are ' + h.name + ', ' + h.title + '!');
+    beep(880,.15,'triangle');
+    setScreen('home');
+  }
+
+  function renderHome(){
+    var dayIndex = new Date().getDate() % FORECASTS.length;
+    var hunter = state.hunter ? hunterById(state.hunter) : null;
+    var welcomeName = hunter ? hunter.name : 'hunter';
+    var welcomeSub = hunter ?
+      ('Weapon charged, ' + hunter.title.toLowerCase() + '. The Lanternboys already saved you a seat.') :
+      'Your lightstick is charged and the Lanternboys already saved you a seat.';
+    stageEl.innerHTML =
+      '<div class="hero">' +
+        avatarHTML(state.equipped, '92px') +
+        '<div><h1>Welcome back, '+welcomeName+'.</h1><p>'+welcomeSub+'</p></div>' +
+      '</div>' +
+      '<div class="forecast">🌙 <span>'+FORECASTS[dayIndex]+'</span></div>' +
+      renderXpCard() +
+      '<div class="stat-row">' +
+        '<div class="stat"><b class="tabular">'+state.starPoints+'</b><span>Star Points</span></div>' +
+        '<div class="stat"><b class="tabular">'+state.unlocked.length+'/'+OUTFITS.length+'</b><span>Outfits</span></div>' +
+        '<div class="stat"><b class="tabular">'+totalAffectionPct()+'%</b><span>Friendship</span></div>' +
+      '</div>' +
+      '<div class="home-grid">' +
+        '<div class="card" data-go="clubhouse"><div class="ico">🏮</div><h3>Clubhouse</h3><p>Change outfits, hang out with the boys.</p></div>' +
+        '<div class="card" data-go="battle"><div class="ico">✨</div><h3>Battle Arena</h3><p>Zap Gloomlings before they reach the stage.</p></div>' +
+        '<div class="card" data-go="arcade"><div class="ico">🎮</div><h3>Mini-Games</h3><p>Rhythm Tap and Memory Match.</p></div>' +
+        '<div class="card" data-go="clubhouse-lounge"><div class="ico">💬</div><h3>Lounge</h3><p>Say hi to Hae, Bit and Nun.</p></div>' +
+        '<div class="card" data-go="study" style="grid-column:1/-1;"><div class="ico">📚</div><h3>Study Hall</h3><p>Math, grammar and reading for Star Points.</p></div>' +
+      '</div>';
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-go]'), function(el){
+      el.addEventListener('click', function(){
+        var go = el.dataset.go;
+        if(go==='clubhouse-lounge'){ setScreen('clubhouse'); renderClubhouse('lounge'); }
+        else setScreen(go);
+      });
+    });
+  }
+  function totalAffectionPct(){
+    var sum=0; for(var k in state.affection){ sum += state.affection[k]; }
+    return Math.round(sum/(3*100)*100);
+  }
+
+  // ---------------- CLUBHOUSE ----------------
+  function renderClubhouse(sub){
+    stageEl.innerHTML =
+      '<div class="subtabs">' +
+        '<button class="subtab" data-sub="closet">Closet</button>' +
+        '<button class="subtab" data-sub="style">Style</button>' +
+        '<button class="subtab" data-sub="weapons">Weapons</button>' +
+        '<button class="subtab" data-sub="lounge">Lounge</button>' +
+      '</div>' +
+      '<div id="clubBody"></div>';
+    Array.prototype.forEach.call(stageEl.querySelectorAll('.subtab'), function(btn){
+      btn.classList.toggle('active', btn.dataset.sub===sub);
+      btn.addEventListener('click', function(){ renderClubhouse(btn.dataset.sub); });
+    });
+    if(sub==='closet') renderCloset();
+    else if(sub==='style') renderStyle();
+    else if(sub==='weapons') renderWeapons();
+    else renderLounge();
+  }
+
+  function renderCloset(){
+    var body = document.getElementById('clubBody');
+    var html = '<div class="closet-preview">'+avatarHTML(state.equipped,'130px')+'</div><div class="swatch-grid">';
+    OUTFITS.forEach(function(o){
+      var unlocked = state.unlocked.indexOf(o.id) !== -1;
+      var equipped = state.equipped === o.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-outfit="'+o.id+'" tabindex="0">' +
+        avatarHTML(o.id, '54px', false).replace('class="avatar"','class="avatar mini-av"') +
+        '<div class="name">'+o.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wear') : '⭐ '+o.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+    Array.prototype.forEach.call(body.querySelectorAll('.swatch'), function(el){
+      el.addEventListener('click', function(){
+        var id = el.dataset.outfit;
+        var o = outfitById(id);
+        var unlocked = state.unlocked.indexOf(id) !== -1;
+        if(unlocked){
+          state.equipped = id; saveState(); renderCloset(); refreshTopbar();
+        } else if(state.starPoints >= o.cost){
+          state.starPoints -= o.cost;
+          state.unlocked.push(id);
+          state.equipped = id;
+          saveState(); refreshTopbar(); renderCloset();
+          showToast('Unlocked ' + o.name + '!');
+          beep(880,.15,'triangle');
+        } else {
+          showToast('Need ' + (o.cost - state.starPoints) + ' more Star Points');
+          beep(160,.12,'square');
+        }
+      });
+    });
+  }
+
+  var STYLE_CATEGORIES = {
+    hairstyle: {list:HAIRSTYLES, unlockedKey:'unlockedHairstyles', equippedKey:'hairstyle'},
+    haircolor: {list:HAIR_COLORS, unlockedKey:'unlockedHairColors', equippedKey:'hairColor'},
+    headwear:  {list:HEADWEAR,    unlockedKey:'unlockedHeadwear',  equippedKey:'headwear'},
+    faceacc:   {list:FACE_ACC,    unlockedKey:'unlockedFaceAcc',   equippedKey:'faceAcc'}
+  };
+
+  function renderStyle(){
+    var body = document.getElementById('clubBody');
+    var html = '<div class="closet-preview">'+avatarHTML(state.equipped,'130px')+'</div>';
+
+    var currentHunter = state.hunter ? hunterById(state.hunter) : null;
+    html += '<div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">' +
+      '<div><div class="eyebrow" style="margin-bottom:2px;">Your Hunter</div><div style="font-weight:800;">'+(currentHunter ? currentHunter.name+' — '+currentHunter.title : 'Unassigned')+'</div></div>' +
+      '<button class="btn btn-ghost" id="changeHunterBtn">Change</button>' +
+    '</div>';
+
+    html += '<div class="eyebrow style-heading">Hairstyle</div><div class="swatch-grid">';
+    HAIRSTYLES.forEach(function(h){
+      var unlocked = state.unlockedHairstyles.indexOf(h.id)!==-1;
+      var equipped = state.hairstyle===h.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-cat="hairstyle" data-id="'+h.id+'" tabindex="0">' +
+        avatarHTML(state.equipped,'54px',false,null,h.id).replace('class="avatar"','class="avatar mini-av"') +
+        '<div class="name">'+h.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wear') : '⭐ '+h.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="eyebrow style-heading">Hair Color</div><div class="swatch-grid">';
+    HAIR_COLORS.forEach(function(c){
+      var unlocked = state.unlockedHairColors.indexOf(c.id)!==-1;
+      var equipped = state.hairColor===c.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-cat="haircolor" data-id="'+c.id+'" tabindex="0">' +
+        '<div class="color-dot" style="background:'+c.hex+'"></div>' +
+        '<div class="name">'+c.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wear') : '⭐ '+c.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="eyebrow style-heading">Headwear</div><div class="swatch-grid">';
+    HEADWEAR.forEach(function(hw){
+      var unlocked = state.unlockedHeadwear.indexOf(hw.id)!==-1;
+      var equipped = state.headwear===hw.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-cat="headwear" data-id="'+hw.id+'" tabindex="0">' +
+        avatarHTML(state.equipped,'54px',false,null,null,hw.id).replace('class="avatar"','class="avatar mini-av"') +
+        '<div class="name">'+hw.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wear') : '⭐ '+hw.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="eyebrow style-heading">Face Accessory</div><div class="swatch-grid">';
+    FACE_ACC.forEach(function(fa){
+      var unlocked = state.unlockedFaceAcc.indexOf(fa.id)!==-1;
+      var equipped = state.faceAcc===fa.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-cat="faceacc" data-id="'+fa.id+'" tabindex="0">' +
+        avatarHTML(state.equipped,'54px',false,null,null,null,fa.id).replace('class="avatar"','class="avatar mini-av"') +
+        '<div class="name">'+fa.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wear') : '⭐ '+fa.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    body.innerHTML = html;
+
+    var changeHunterBtn = document.getElementById('changeHunterBtn');
+    if(changeHunterBtn) changeHunterBtn.addEventListener('click', function(){ setScreen('select-hunter'); });
+
+    Array.prototype.forEach.call(body.querySelectorAll('.swatch'), function(el){
+      el.addEventListener('click', function(){
+        var cfg = STYLE_CATEGORIES[el.dataset.cat];
+        var id = el.dataset.id;
+        var item = null;
+        for(var i=0;i<cfg.list.length;i++){ if(cfg.list[i].id===id){ item = cfg.list[i]; break; } }
+        var unlocked = state[cfg.unlockedKey].indexOf(id) !== -1;
+        if(unlocked){
+          state[cfg.equippedKey] = id; saveState(); renderStyle(); refreshTopbar();
+        } else if(state.starPoints >= item.cost){
+          state.starPoints -= item.cost;
+          state[cfg.unlockedKey].push(id);
+          state[cfg.equippedKey] = id;
+          saveState(); refreshTopbar(); renderStyle();
+          showToast('Unlocked ' + item.name + '!');
+          beep(880,.15,'triangle');
+        } else {
+          showToast('Need ' + (item.cost - state.starPoints) + ' more Star Points');
+          beep(160,.12,'square');
+        }
+      });
+    });
+  }
+
+  function renderWeapons(){
+    var body = document.getElementById('clubBody');
+    var equippedWeapon = weaponById(state.equippedWeapon);
+    var html = '<div class="closet-preview">'+avatarHTML(state.equipped,'130px',true,state.equippedWeapon)+'</div><div class="swatch-grid">';
+    WEAPONS.forEach(function(w){
+      var unlocked = state.unlockedWeapons.indexOf(w.id) !== -1;
+      var equipped = state.equippedWeapon === w.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-weapon="'+w.id+'" tabindex="0">' +
+        avatarHTML(state.equipped, '54px', false, w.id).replace('class="avatar"','class="avatar mini-av"') +
+        '<div class="name">'+w.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wield') : '⭐ '+w.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div><p style="font-size:11.5px;color:var(--dim);text-align:center;margin-top:10px;">'+equippedWeapon.desc+'</p>';
+    body.innerHTML = html;
+    Array.prototype.forEach.call(body.querySelectorAll('.swatch'), function(el){
+      el.addEventListener('click', function(){
+        var id = el.dataset.weapon;
+        var w = weaponById(id);
+        var unlocked = state.unlockedWeapons.indexOf(id) !== -1;
+        if(unlocked){
+          state.equippedWeapon = id; saveState(); renderWeapons(); refreshTopbar();
+        } else if(state.starPoints >= w.cost){
+          state.starPoints -= w.cost;
+          state.unlockedWeapons.push(id);
+          state.equippedWeapon = id;
+          saveState(); refreshTopbar(); renderWeapons();
+          showToast('Unlocked ' + w.name + '!');
+          beep(880,.15,'triangle');
+        } else {
+          showToast('Need ' + (w.cost - state.starPoints) + ' more Star Points');
+          beep(160,.12,'square');
+        }
+      });
+    });
+  }
+
+  var loungeLineIndex = {hae:0,bit:0,nun:0};
+  function renderLounge(){
+    var body = document.getElementById('clubBody');
+    body.innerHTML = '<div class="boy-list"></div>';
+    var list = body.querySelector('.boy-list');
+    LANTERNBOYS.forEach(function(b){
+      var pct = state.affection[b.id];
+      var row = document.createElement('div');
+      row.className = 'boy-row';
+      row.innerHTML =
+        '<div class="lantern-av" style="--bcolor:'+b.color+'"><img class="lantern-sprite" src="'+getLanternSprite(b.id).toDataURL()+'" alt="'+b.name+'"></div>' +
+        '<div class="boy-info">' +
+          '<div class="name">'+b.name+'</div>' +
+          '<div class="role">'+b.role+'</div>' +
+          '<div class="affection-bar"><div class="affection-fill" style="width:'+pct+'%"></div></div>' +
+        '</div>';
+      row.addEventListener('click', function(){ openDialogue(b.id); });
+      list.appendChild(row);
+    });
+  }
+
+  function openDialogue(boyId){
+    var b = boyById(boyId);
+    var body = document.getElementById('clubBody');
+    var line = b.lines[loungeLineIndex[boyId] % b.lines.length];
+    body.innerHTML =
+      '<div class="dialogue-card">' +
+        '<div class="lantern-av" style="--bcolor:'+b.color+';width:76px;height:76px;"><img class="lantern-sprite" src="'+getLanternSprite(boyId).toDataURL()+'" alt="'+b.name+'"></div>' +
+        '<div><b>'+b.name+'</b><div class="role" style="color:var(--dim);font-size:12px;">'+b.role+'</div></div>' +
+        '<div class="dialogue-bubble" id="dlgLine">"'+line+'"</div>' +
+        '<div class="affection-bar" style="width:100%;"><div class="affection-fill" id="dlgFill" style="width:'+state.affection[boyId]+'%"></div></div>' +
+        '<div style="display:flex; gap:8px; width:100%;">' +
+          '<button class="btn btn-ghost" id="dlgBack" style="flex:1;">Back</button>' +
+          '<button class="btn btn-primary" id="dlgFive" style="flex:2;">✋ High Five</button>' +
+        '</div>' +
+      '</div>';
+    document.getElementById('dlgBack').addEventListener('click', function(){ renderLounge(); });
+    document.getElementById('dlgFive').addEventListener('click', function(){
+      loungeLineIndex[boyId] = (loungeLineIndex[boyId]+1) % b.lines.length;
+      document.getElementById('dlgLine').textContent = '"' + b.lines[loungeLineIndex[boyId]] + '"';
+      beep(660,.12,'sine');
+      if(state.affection[boyId] < 100){
+        state.affection[boyId] = Math.min(100, state.affection[boyId] + 4 + Math.floor(Math.random()*5));
+        earnPoints(2);
+        saveState(); refreshTopbar();
+        document.getElementById('dlgFill').style.width = state.affection[boyId] + '%';
+        showToast('+2 Star Points');
+      }
+    });
+  }
+
+  // ---------------- BATTLE ARENA ----------------
+  var BATTLE_TIME = 45;
+
+  function renderBattleHub(){
+    stageEl.innerHTML =
+      '<div class="eyebrow">Battle Arena</div>' +
+      '<h2 style="margin:2px 0 4px;">Pick a patrol</h2>' +
+      '<div class="arcade-grid">' +
+        '<div class="card arcade-card" data-mode="zap"><div class="ico">✨</div><h3>Zap Patrol</h3><p>Tap Gloomlings before they float away.</p><div class="best">Best '+state.best.battle+'</div></div>' +
+        '<div class="card arcade-card" data-mode="brawl"><div class="ico">👊</div><h3>Alley Brawl</h3><p>Walk up and punch — a beat-’em-up patrol.</p><div class="best">Best '+state.best.brawl+'</div></div>' +
+      '</div>';
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-mode]'), function(el){
+      el.addEventListener('click', function(){
+        if(el.dataset.mode==='zap') renderZapIntro();
+        else renderBrawlIntro();
+      });
+    });
+  }
+
+  function renderZapIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Zap Patrol</div>' +
+        '<h2 style="margin:4px 0;">Zap the Gloomlings</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Tap the little shadow blobs before they reach the top. Watch out — the Grumble King shows up partway through and takes five hits!</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.battle+'</b></div>' +
+        '<button class="btn btn-primary" id="startBattle" style="margin-top:12px; width:100%;">Start Patrol</button>' +
+        '<button class="btn btn-ghost" id="backBattleHub1" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startBattle').addEventListener('click', runBattle);
+    document.getElementById('backBattleHub1').addEventListener('click', renderBattleHub);
+  }
+
+  function runBattle(){
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span>Score <b class="tabular" id="bScore">0</b></span><span id="bTime" class="tabular">'+BATTLE_TIME+'s</span></div>' +
+      '<div class="battle-wrap"><canvas id="battleCanvas" width="400" height="480"></canvas></div>';
+    var canvas = document.getElementById('battleCanvas');
+    var ctx = canvas.getContext('2d');
+    var scoreEl = document.getElementById('bScore');
+    var timeEl = document.getElementById('bTime');
+
+    var W = canvas.width, H = canvas.height;
+    var demons = [];
+    var score = 0, combo = 0, timeLeft = BATTLE_TIME, running = true;
+    var lastSpawn = 0, rafId = null, timerId = null;
+    var particles = [];
+    var stars = makeStarfield(36, W, H);
+    var colors = ['#52E8C6','#8E7CFF','#FF8B5E','#FFD36E'];
+    var boss = null, bossSpawned = false, bossFlash = 0;
+    var BOSS_HEALTH = 5;
+
+    function spawnDemon(){
+      var r = 20 + Math.random()*14;
+      demons.push({
+        x: r + Math.random()*(W-2*r),
+        y: H + r,
+        r: r,
+        speed: 0.55 + Math.random()*0.6 + Math.min(1.2, timeLeft/60),
+        color: colors[Math.floor(Math.random()*colors.length)],
+        wobble: Math.random()*Math.PI*2
+      });
+    }
+    function spawnBoss(){
+      boss = {
+        x: W/2,
+        y: H + 60,
+        r: 46,
+        speed: 0.3,
+        health: BOSS_HEALTH,
+        wobble: Math.random()*Math.PI*2
+      };
+      showToast('The Grumble King appears!');
+      beep(140,.3,'sawtooth');
+    }
+    function spawnParticles(x,y,color){
+      for(var i=0;i<10;i++){
+        var ang = Math.random()*Math.PI*2;
+        particles.push({x:x,y:y,vx:Math.cos(ang)*3,vy:Math.sin(ang)*3,life:22,color:color});
+      }
+    }
+    function drawDemon(d){
+      var sprite = getGloomlingSprite(d.color);
+      var size = d.r*2.1;
+      ctx.save();
+      ctx.drawImage(sprite, d.x-size/2, d.y-size/2, size, size);
+      ctx.restore();
+    }
+    function drawBoss(b){
+      var sprite = getBossSprite();
+      var size = b.r*2.3;
+      ctx.save();
+      if(bossFlash > 0){
+        ctx.filter = 'brightness(2.2) saturate(0)';
+      }
+      ctx.drawImage(sprite, b.x-size/2, b.y-size/2, size, size);
+      ctx.filter = 'none';
+      ctx.restore();
+
+      var barW = 120, barX = b.x - barW/2, barY = b.y - b.r - 30;
+      ctx.fillStyle = 'rgba(255,255,255,.15)';
+      ctx.fillRect(barX, barY, barW, 10);
+      ctx.fillStyle = '#FF5FA2';
+      ctx.fillRect(barX, barY, barW * (b.health/BOSS_HEALTH), 10);
+      ctx.strokeStyle = 'rgba(255,255,255,.4)';
+      ctx.strokeRect(barX, barY, barW, 10);
+      ctx.fillStyle = '#F5EFFF';
+      ctx.font = '11px "Baloo 2", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('GRUMBLE KING', b.x, barY - 6);
+      if(bossFlash > 0) bossFlash--;
+    }
+    function frame(ts){
+      if(!running) return;
+      ctx.clearRect(0,0,W,H);
+      drawStarfield(ctx, stars, ts);
+      ctx.fillStyle = 'rgba(255,255,255,.05)';
+      ctx.fillRect(0,H-2,W,2);
+
+      if(ts - lastSpawn > Math.max(420, 950 - (BATTLE_TIME-timeLeft)*14)){
+        spawnDemon(); lastSpawn = ts;
+      }
+      if(!bossSpawned && (BATTLE_TIME - timeLeft) >= 20){
+        spawnBoss(); bossSpawned = true;
+      }
+      for(var i=demons.length-1;i>=0;i--){
+        var d = demons[i];
+        d.wobble += 0.05;
+        d.y -= d.speed;
+        d.x += Math.sin(d.wobble)*0.6;
+        drawDemon(d);
+        if(d.y < -d.r){ demons.splice(i,1); if(combo>0) beep(130,.09,'sine'); combo = 0; }
+      }
+      if(boss){
+        boss.wobble += 0.04;
+        boss.y -= boss.speed;
+        boss.x += Math.sin(boss.wobble)*0.4;
+        boss.x = Math.max(boss.r, Math.min(W-boss.r, boss.x));
+        drawBoss(boss);
+        if(boss.y < -boss.r - 30){
+          showToast('The Grumble King slipped away...');
+          boss = null;
+        }
+      }
+      for(var p=particles.length-1;p>=0;p--){
+        var pt = particles[p];
+        pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.12; pt.life--;
+        ctx.globalAlpha = Math.max(0,pt.life/22);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,3,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+        if(pt.life<=0) particles.splice(p,1);
+      }
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function handleTap(evt){
+      var rect = canvas.getBoundingClientRect();
+      var scale = W/rect.width;
+      var cx = ((evt.touches?evt.touches[0].clientX:evt.clientX) - rect.left)*scale;
+      var cy = ((evt.touches?evt.touches[0].clientY:evt.clientY) - rect.top)*scale;
+
+      if(boss){
+        var bdx = cx-boss.x, bdy = cy-boss.y;
+        if(bdx*bdx+bdy*bdy <= boss.r*boss.r*1.3){
+          boss.health--;
+          bossFlash = 6;
+          spawnParticles(boss.x, boss.y, '#7C3AED');
+          beep(220, .1, 'sawtooth');
+          if(boss.health <= 0){
+            spawnParticles(boss.x, boss.y, '#FF5FA2');
+            spawnParticles(boss.x, boss.y, '#FFC15E');
+            score += 15;
+            scoreEl.textContent = score;
+            showToast('Grumble King defeated! +15');
+            beep(980, .22, 'triangle');
+            boss = null;
+          }
+          evt.preventDefault();
+          return;
+        }
+      }
+
+      for(var i=demons.length-1;i>=0;i--){
+        var d = demons[i];
+        var dx = cx-d.x, dy = cy-d.y;
+        if(dx*dx+dy*dy <= d.r*d.r*1.4){
+          spawnParticles(d.x,d.y,d.color);
+          demons.splice(i,1);
+          combo++;
+          score += 1 + Math.floor(combo/5);
+          scoreEl.textContent = score;
+          beep(520 + combo*8, .08, 'triangle');
+          evt.preventDefault();
+          break;
+        }
+      }
+    }
+    canvas.addEventListener('pointerdown', handleTap);
+
+    timerId = setInterval(function(){
+      timeLeft--;
+      timeEl.textContent = timeLeft + 's';
+      if(timeLeft<=0) endBattle();
+    }, 1000);
+
+    rafId = requestAnimationFrame(frame);
+
+    function endBattle(){
+      running = false;
+      clearInterval(timerId);
+      cancelAnimationFrame(rafId);
+      var zapBonus = (weaponById(state.equippedWeapon).bonus || {}).zapScore || 0;
+      score = Math.round(score * (1 + zapBonus));
+      var earned = Math.max(5, Math.round(score/2));
+      earnPoints(earned);
+      if(score > state.best.battle) state.best.battle = score;
+      saveState(); refreshTopbar();
+      playFanfare();
+      var wrap = stageEl.querySelector('.battle-wrap');
+      wrap.insertAdjacentHTML('beforeend',
+        '<div class="overlay-center">' +
+          '<h2 style="margin:0;">Patrol Complete!</h2>' +
+          '<p style="color:var(--dim); margin:0;">Score <b class="tabular" style="color:var(--cream);">'+score+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
+          '<button class="btn btn-primary" id="battleAgain">Patrol Again</button>' +
+          '<button class="btn btn-ghost" id="battleDone">Back to Battle Menu</button>' +
+        '</div>'
+      );
+      document.getElementById('battleAgain').addEventListener('click', runBattle);
+      document.getElementById('battleDone').addEventListener('click', renderBattleHub);
+    }
+
+    activeCleanup = function(){
+      running = false;
+      clearInterval(timerId);
+      if(rafId) cancelAnimationFrame(rafId);
+      canvas.removeEventListener('pointerdown', handleTap);
+    };
+  }
+
+  // ---------------- ALLEY BRAWL (beat-'em-up patrol) ----------------
+  var BRAWL_WAVES = 3;
+  var BRAWL_HEARTS = 3;
+  var BRAWL_BOSS_HEALTH = 8;
+
+  function renderBrawlIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Alley Brawl</div>' +
+        '<h2 style="margin:4px 0;">Walk up and zap &#39;em</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Move left and right down the alley, punch Gloomlings before they bump you. Clear 3 waves, then take down the Grumble King. You&#39;ve got 3 hearts.</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.brawl+'</b></div>' +
+        '<button class="btn btn-primary" id="startBrawl" style="margin-top:12px; width:100%;">Start Brawl</button>' +
+        '<button class="btn btn-ghost" id="backBattleHub2" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startBrawl').addEventListener('click', runBrawl);
+    document.getElementById('backBattleHub2').addEventListener('click', renderBattleHub);
+  }
+
+  function runBrawl(){
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span class="hearts-row" id="brHearts">❤️❤️❤️</span><span id="brWave">Wave 1/'+BRAWL_WAVES+'</span><span>Score <b class="tabular" id="brScore">0</b></span></div>' +
+      '<div class="battle-wrap brawl-arena"><canvas id="brawlCanvas" width="400" height="380"></canvas></div>' +
+      '<div class="brawl-controls">' +
+        '<div class="brawl-btn" id="brLeft">◀</div>' +
+        '<div class="brawl-btn punch" id="brPunch">👊 ZAP</div>' +
+        '<div class="brawl-btn" id="brRight">▶</div>' +
+      '</div>';
+    var canvas = document.getElementById('brawlCanvas');
+    var ctx = canvas.getContext('2d');
+    var scoreEl = document.getElementById('brScore');
+    var heartsEl = document.getElementById('brHearts');
+    var waveEl = document.getElementById('brWave');
+    var W = canvas.width, H = canvas.height;
+    var GROUND_Y = 300;
+
+    var running = true, rafId = null;
+    var score = 0, hearts = BRAWL_HEARTS, waveNum = 1, bossPhase = false, ended = false;
+    var player = { x: W/2, facing: 1, invincible: 0 };
+    var punchActive = 0, punchCooldown = 0, punchId = 0;
+    var punchRangeBonus = (weaponById(state.equippedWeapon).bonus || {}).punchRange || 0;
+    var enemies = [];
+    var boss = null, bossHitFlash = 0;
+    var spawnQueue = [], spawnTimer = 0;
+    var particles = [];
+    var wavePause = 0;
+    var keysDown = {left:false, right:false};
+    var stars = makeStarfield(24, W, GROUND_Y-40);
+
+    function spawnParticles(x,y,color){
+      for(var i=0;i<10;i++){
+        var ang = Math.random()*Math.PI*2;
+        particles.push({x:x,y:y,vx:Math.cos(ang)*3,vy:Math.sin(ang)*3,life:20,color:color});
+      }
+    }
+
+    function queueWave(n){
+      var count = 3 + n;
+      spawnQueue = [];
+      for(var i=0;i<count;i++){ spawnQueue.push(Math.random()<0.5 ? 'left' : 'right'); }
+      waveEl.textContent = 'Wave '+n+'/'+BRAWL_WAVES;
+    }
+    queueWave(waveNum);
+
+    function spawnEnemy(side){
+      var colors = ['#52E8C6','#8E7CFF','#FF8B5E','#FFD36E'];
+      enemies.push({
+        x: side==='left' ? -20 : W+20,
+        r: 26,
+        speed: 1.1 + Math.random()*0.5,
+        color: colors[Math.floor(Math.random()*colors.length)],
+        hitPunchId: -1,
+        bumpCooldown: 0,
+        age: 0
+      });
+    }
+
+    function updateHearts(){
+      heartsEl.textContent = '❤️'.repeat(hearts) + '🖤'.repeat(BRAWL_HEARTS-hearts);
+    }
+
+    function triggerPunch(){
+      if(punchCooldown>0 || ended) return;
+      punchId++;
+      punchActive = 10;
+      punchCooldown = 20;
+      beep(500, .08, 'triangle');
+    }
+
+    function hurtPlayer(fromX){
+      if(player.invincible>0) return;
+      hearts--; updateHearts();
+      player.invincible = 55;
+      player.x += (player.x < fromX ? -26 : 26);
+      player.x = Math.max(24, Math.min(W-24, player.x));
+      beep(160, .16, 'sawtooth');
+      if(hearts<=0) endBrawl(false);
+    }
+
+    function drawGround(ts){
+      ctx.fillStyle = '#0F0A22';
+      ctx.fillRect(0,0,W,H);
+      drawStarfield(ctx, stars, ts);
+
+      var vanishX = W/2, vanishY = GROUND_Y - 210;
+      ctx.strokeStyle = 'rgba(245,239,255,.07)';
+      ctx.lineWidth = 1;
+      [16, 90, W-90, W-16].forEach(function(x){
+        ctx.beginPath();
+        ctx.moveTo(vanishX, vanishY);
+        ctx.lineTo(x, GROUND_Y+34);
+        ctx.stroke();
+      });
+
+      ctx.fillStyle = 'rgba(255,255,255,.05)';
+      for(var gx=0; gx<W; gx+=40){ ctx.fillRect(gx, GROUND_Y+34, 26, 3); }
+      ctx.fillStyle = 'rgba(245,239,255,.12)';
+      ctx.fillRect(0, GROUND_Y+30, W, 2);
+    }
+
+    function drawPlayer(){
+      var sprite = getPlayerSprite(state.equipped, state.equippedWeapon);
+      var w = 64, h = 88;
+      ctx.save();
+      ctx.translate(player.x, GROUND_Y);
+      if(player.facing<0) ctx.scale(-1,1);
+      if(player.invincible>0 && Math.floor(player.invincible/4)%2===0){ ctx.globalAlpha = 0.35; }
+      ctx.drawImage(sprite, -w/2, -h, w, h);
+      ctx.restore();
+      if(punchActive>0){
+        ctx.save();
+        ctx.globalAlpha = punchActive/10*0.6;
+        ctx.fillStyle = '#FFC15E';
+        var px = player.x + player.facing*40;
+        ctx.beginPath(); ctx.arc(px, GROUND_Y-34, 16, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function drawEnemy(e){
+      var sprite = getGloomlingSprite(e.color);
+      var pop = Math.min(1, e.age/14);
+      var scale = 0.45 + 0.55*(pop*(2-pop));
+      var s = e.r*2.1*scale;
+      ctx.save();
+      ctx.globalAlpha = 0.5 + 0.5*pop;
+      ctx.drawImage(sprite, e.x-s/2, GROUND_Y-s, s, s);
+      ctx.restore();
+    }
+
+    function drawBoss(b){
+      var sprite = getBossSprite();
+      var pop = Math.min(1, (b.age||20)/20);
+      var s = 100 * (0.5 + 0.5*(pop*(2-pop)));
+      ctx.save();
+      ctx.globalAlpha = 0.4 + 0.6*pop;
+      if(bossHitFlash>0){ ctx.filter = 'brightness(2.2) saturate(0)'; }
+      ctx.drawImage(sprite, b.x-s/2, GROUND_Y-s, s, s);
+      ctx.filter = 'none';
+      ctx.restore();
+      var barW=140, barX=b.x-barW/2, barY=GROUND_Y-s-24;
+      ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(barX,barY,barW,9);
+      ctx.fillStyle='#FF5FA2'; ctx.fillRect(barX,barY,barW*(b.health/BRAWL_BOSS_HEALTH),9);
+      ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.strokeRect(barX,barY,barW,9);
+      ctx.fillStyle='#F5EFFF'; ctx.font='11px "Baloo 2", sans-serif'; ctx.textAlign='center';
+      ctx.fillText('GRUMBLE KING', b.x, barY-6);
+      if(bossHitFlash>0) bossHitFlash--;
+    }
+
+    function frame(ts){
+      if(!running) return;
+      drawGround(ts);
+
+      if(keysDown.left){ player.x -= 3; player.facing = -1; }
+      if(keysDown.right){ player.x += 3; player.facing = 1; }
+      player.x = Math.max(24, Math.min(W-24, player.x));
+      if(player.invincible>0) player.invincible--;
+      if(punchCooldown>0) punchCooldown--;
+      if(punchActive>0) punchActive--;
+
+      if(!bossPhase && !ended){
+        if(wavePause>0){
+          wavePause--;
+        } else if(spawnQueue.length){
+          spawnTimer--;
+          if(spawnTimer<=0){ spawnEnemy(spawnQueue.shift()); spawnTimer = 55; }
+        } else if(!enemies.length){
+          if(waveNum < BRAWL_WAVES){
+            waveNum++;
+            wavePause = 70;
+            showToast('Wave cleared!');
+            queueWave(waveNum);
+          } else {
+            bossPhase = true;
+            waveEl.textContent = 'BOSS!';
+            boss = { x: W+40, health: BRAWL_BOSS_HEALTH, bumpCooldown: 0, lastHitId: -1, age: 0 };
+            showToast('The Grumble King blocks the alley!');
+            beep(140,.3,'sawtooth');
+          }
+        }
+      }
+
+      for(var i=enemies.length-1;i>=0;i--){
+        var e = enemies[i];
+        e.age++;
+        e.x += (player.x < e.x ? -1 : 1) * e.speed;
+        if(e.bumpCooldown>0) e.bumpCooldown--;
+        drawEnemy(e);
+
+        var dx = e.x - player.x;
+        if(punchActive>0 && e.hitPunchId!==punchId && Math.sign(dx||1)===player.facing && Math.abs(dx)<46+punchRangeBonus){
+          e.hitPunchId = punchId;
+          spawnParticles(e.x, GROUND_Y-24, e.color);
+          score += 2; scoreEl.textContent = score;
+          beep(700,.08,'triangle');
+          enemies.splice(i,1);
+          continue;
+        }
+        if(Math.abs(dx)<28 && e.bumpCooldown<=0){
+          hurtPlayer(e.x);
+          e.bumpCooldown = 50;
+        }
+      }
+
+      if(boss){
+        boss.age = (boss.age||0) + 1;
+        boss.x += (player.x < boss.x ? -1 : 1) * 0.8;
+        var bdx = boss.x - player.x;
+        if(punchActive>0 && Math.sign(bdx||1)===player.facing && Math.abs(bdx)<58+punchRangeBonus){
+          if(boss.lastHitId!==punchId){
+            boss.lastHitId = punchId;
+            boss.health--;
+            bossHitFlash = 6;
+            spawnParticles(boss.x, GROUND_Y-40, '#7C3AED');
+            beep(220,.1,'sawtooth');
+            if(boss.health<=0){
+              spawnParticles(boss.x, GROUND_Y-40, '#FF5FA2');
+              spawnParticles(boss.x, GROUND_Y-40, '#FFC15E');
+              score += 30; scoreEl.textContent = score;
+              boss = null;
+              endBrawl(true);
+            }
+          }
+        } else if(Math.abs(bdx)<40 && (!boss.bumpCooldown || boss.bumpCooldown<=0)){
+          hurtPlayer(boss.x);
+          boss.bumpCooldown = 60;
+        }
+        if(boss && boss.bumpCooldown>0) boss.bumpCooldown--;
+        if(boss) drawBoss(boss);
+      }
+
+      drawPlayer();
+
+      for(var p=particles.length-1;p>=0;p--){
+        var pt = particles[p];
+        pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.12; pt.life--;
+        ctx.globalAlpha = Math.max(0,pt.life/20);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,3,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+        if(pt.life<=0) particles.splice(p,1);
+      }
+
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function onKeyDown(e){
+      var k = e.key.toLowerCase();
+      if(k==='arrowleft'||k==='a') keysDown.left = true;
+      if(k==='arrowright'||k==='d') keysDown.right = true;
+      if(k===' '||k==='j'){ e.preventDefault(); triggerPunch(); }
+    }
+    function onKeyUp(e){
+      var k = e.key.toLowerCase();
+      if(k==='arrowleft'||k==='a') keysDown.left = false;
+      if(k==='arrowright'||k==='d') keysDown.right = false;
+    }
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    var btnLeft = document.getElementById('brLeft');
+    var btnRight = document.getElementById('brRight');
+    var btnPunch = document.getElementById('brPunch');
+    function holdStart(dir){ return function(ev){ ev.preventDefault(); keysDown[dir]=true; }; }
+    function holdEnd(dir){ return function(){ keysDown[dir]=false; }; }
+    btnLeft.addEventListener('pointerdown', holdStart('left'));
+    btnRight.addEventListener('pointerdown', holdStart('right'));
+    ['pointerup','pointerleave','pointercancel'].forEach(function(ev){
+      btnLeft.addEventListener(ev, holdEnd('left'));
+      btnRight.addEventListener(ev, holdEnd('right'));
+    });
+    btnPunch.addEventListener('pointerdown', function(ev){ ev.preventDefault(); triggerPunch(); });
+
+    updateHearts();
+    rafId = requestAnimationFrame(frame);
+
+    function endBrawl(won){
+      if(ended) return;
+      ended = true;
+      running = false;
+      if(rafId) cancelAnimationFrame(rafId);
+      var heartBonus = hearts*5;
+      score += heartBonus;
+      var earned = Math.max(5, Math.round(score/2));
+      earnPoints(earned);
+      if(score > state.best.brawl) state.best.brawl = score;
+      saveState(); refreshTopbar();
+      playFanfare();
+      var wrap = stageEl.querySelector('.battle-wrap');
+      wrap.insertAdjacentHTML('beforeend',
+        '<div class="overlay-center">' +
+          '<h2 style="margin:0;">'+(won ? 'Alley Clear!' : 'Patrol Interrupted')+'</h2>' +
+          '<p style="color:var(--dim); margin:0;">Score <b class="tabular" style="color:var(--cream);">'+score+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
+          '<button class="btn btn-primary" id="brawlAgain">Brawl Again</button>' +
+          '<button class="btn btn-ghost" id="brawlDone">Back to Battle Menu</button>' +
+        '</div>'
+      );
+      document.getElementById('brawlAgain').addEventListener('click', runBrawl);
+      document.getElementById('brawlDone').addEventListener('click', renderBattleHub);
+    }
+
+    activeCleanup = function(){
+      running = false;
+      if(rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }
+
+  // ---------------- ARCADE HUB ----------------
+  function renderArcadeHub(){
+    stageEl.innerHTML =
+      '<div class="eyebrow">Mini-Games</div>' +
+      '<h2 style="margin:2px 0 4px;">Pick a game</h2>' +
+      '<div class="arcade-grid">' +
+        '<div class="card arcade-card" data-game="rhythm"><div class="ico">🎧</div><h3>Rhythm Tap</h3><p>Hit the beat in four lanes.</p><div class="best">Best '+state.best.rhythm+'</div></div>' +
+        '<div class="card arcade-card" data-game="memory"><div class="ico">🍡</div><h3>Memory Match</h3><p>Find every matching pair.</p><div class="best">Best '+(state.best.memory||'—')+'</div></div>' +
+        '<div class="card arcade-card" data-game="catch"><div class="ico">⭐</div><h3>Star Catch</h3><p>Move to catch stars, dodge Gloomlings.</p><div class="best">Best '+state.best.catch+'</div></div>' +
+        '<div class="card arcade-card" data-game="lantern"><div class="ico">🏮</div><h3>Lantern Says</h3><p>Watch the pattern, repeat it back.</p><div class="best">Best '+state.best.lantern+'</div></div>' +
+      '</div>';
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-game]'), function(el){
+      el.addEventListener('click', function(){
+        var g = el.dataset.game;
+        if(g==='rhythm') renderRhythmIntro();
+        else if(g==='memory') renderMemoryIntro();
+        else if(g==='catch') renderCatchIntro();
+        else renderLanternIntro();
+      });
+    });
+  }
+
+  // ---------------- RHYTHM TAP ----------------
+  function renderRhythmIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Rhythm Tap</div>' +
+        '<h2 style="margin:4px 0;">Hit the glow line</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0;">Notes fall down four lanes — tap the matching button when they cross the line.</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.rhythm+'</b></div>' +
+        '<button class="btn btn-primary" id="startRhythm" style="margin-top:12px; width:100%;">Start Song</button>' +
+        '<button class="btn btn-ghost" id="backArcade1" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startRhythm').addEventListener('click', runRhythm);
+    document.getElementById('backArcade1').addEventListener('click', renderArcadeHub);
+  }
+
+  function runRhythm(){
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span>Score <b class="tabular" id="rScore">0</b></span><span id="rJudge">Get ready…</span></div>' +
+      '<div class="battle-wrap"><canvas id="rhythmCanvas" width="360" height="440"></canvas></div>' +
+      '<div class="lane-buttons">' +
+        '<button class="lane-btn" data-lane="0">D</button>' +
+        '<button class="lane-btn" data-lane="1">F</button>' +
+        '<button class="lane-btn" data-lane="2">J</button>' +
+        '<button class="lane-btn" data-lane="3">K</button>' +
+      '</div>';
+    var canvas = document.getElementById('rhythmCanvas');
+    var ctx = canvas.getContext('2d');
+    var scoreEl = document.getElementById('rScore');
+    var judgeEl = document.getElementById('rJudge');
+    var W = canvas.width, H = canvas.height, laneW = W/4;
+    var targetY = H - 60;
+    var speed = 3.2;
+    var notes = [];
+    var chart = [];
+    var totalNotes = 26;
+    for(var i=0;i<totalNotes;i++){ chart.push({lane: Math.floor(Math.random()*4), t: 900 + i*620}); }
+    var startTime = null, rafId = null, running = true, score = 0;
+
+    function laneColor(l){ return ['#FF5FA2','#FFC15E','#52E8C6','#8E7CFF'][l]; }
+
+    function frame(ts){
+      if(!running) return;
+      if(startTime===null) startTime = ts;
+      var elapsed = ts - startTime;
+      while(chart.length && chart[0].t <= elapsed){
+        var c = chart.shift();
+        notes.push({lane:c.lane, y:-20, hit:false});
+      }
+      ctx.clearRect(0,0,W,H);
+      for(var l=0;l<4;l++){
+        ctx.fillStyle = 'rgba(255,255,255,.04)';
+        ctx.fillRect(l*laneW,0,laneW-4,H);
+      }
+      ctx.fillStyle = 'rgba(245,239,255,.5)';
+      ctx.fillRect(0,targetY,W,3);
+
+      for(var i2=notes.length-1;i2>=0;i2--){
+        var n = notes[i2];
+        n.y += speed;
+        ctx.fillStyle = laneColor(n.lane);
+        ctx.beginPath();
+        var cx = n.lane*laneW + laneW/2;
+        ctx.roundRect ? ctx.roundRect(cx-laneW*0.36, n.y-12, laneW*0.72, 24, 8) : ctx.rect(cx-laneW*0.36, n.y-12, laneW*0.72, 24);
+        ctx.fill();
+        if(n.y - targetY > 40){ notes.splice(i2,1); judgeText('Miss'); }
+      }
+
+      if(!chart.length && !notes.length){ endRhythm(); return; }
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function judgeText(t){ judgeEl.textContent = t; }
+
+    function tryHit(lane){
+      var best = null, bestDist = 9999;
+      for(var i=0;i<notes.length;i++){
+        var n = notes[i];
+        if(n.lane!==lane) continue;
+        var dist = Math.abs(n.y - targetY);
+        if(dist < bestDist){ bestDist = dist; best = i; }
+      }
+      if(best!==null && bestDist < 46){
+        notes.splice(best,1);
+        var gained = bestDist < 16 ? 3 : 1;
+        score += gained;
+        scoreEl.textContent = score;
+        judgeText(gained===3 ? 'Perfect!' : 'Good');
+        beep(gained===3?880:600, .09, 'triangle');
+      } else {
+        judgeText('Miss');
+        beep(180,.1,'square');
+      }
+    }
+
+    var laneButtons = stageEl.querySelectorAll('.lane-btn');
+    var keyMap = {'d':0,'f':1,'j':2,'k':3};
+    function onKey(e){ var l = keyMap[e.key.toLowerCase()]; if(l!==undefined) tryHit(l); }
+    Array.prototype.forEach.call(laneButtons, function(btn){
+      btn.addEventListener('pointerdown', function(){ tryHit(parseInt(btn.dataset.lane,10)); });
+    });
+    window.addEventListener('keydown', onKey);
+
+    rafId = requestAnimationFrame(frame);
+
+    function endRhythm(){
+      running = false;
+      if(rafId) cancelAnimationFrame(rafId);
+      var earned = Math.max(5, Math.round(score/3));
+      earnPoints(earned);
+      if(score > state.best.rhythm) state.best.rhythm = score;
+      saveState(); refreshTopbar();
+      playFanfare();
+      var wrap = stageEl.querySelector('.battle-wrap');
+      wrap.insertAdjacentHTML('beforeend',
+        '<div class="overlay-center">' +
+          '<h2 style="margin:0;">Song Complete!</h2>' +
+          '<p style="color:var(--dim); margin:0;">Score <b class="tabular" style="color:var(--cream);">'+score+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
+          '<button class="btn btn-primary" id="rhythmAgain">Play Again</button>' +
+          '<button class="btn btn-ghost" id="rhythmDone">Back to Mini-Games</button>' +
+        '</div>'
+      );
+      document.getElementById('rhythmAgain').addEventListener('click', runRhythm);
+      document.getElementById('rhythmDone').addEventListener('click', renderArcadeHub);
+    }
+
+    activeCleanup = function(){
+      running = false;
+      if(rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', onKey);
+    };
+  }
+
+  // ---------------- MEMORY MATCH ----------------
+  function renderMemoryIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Memory Match</div>' +
+        '<h2 style="margin:4px 0;">Find the pairs</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0;">Flip two cards at a time. Match every pair in as few moves as you can.</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Fewest moves: <b class="tabular" style="color:var(--amber);">'+(state.best.memory||'—')+'</b></div>' +
+        '<button class="btn btn-primary" id="startMemory" style="margin-top:12px; width:100%;">Deal Cards</button>' +
+        '<button class="btn btn-ghost" id="backArcade2" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startMemory').addEventListener('click', runMemory);
+    document.getElementById('backArcade2').addEventListener('click', renderArcadeHub);
+  }
+
+  function runMemory(){
+    var deck = MEM_ICONS.concat(MEM_ICONS).map(function(icon,i){ return {icon:icon, id:i}; });
+    for(var i=deck.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=deck[i]; deck[i]=deck[j]; deck[j]=t; }
+
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span>Moves <b class="tabular" id="mMoves">0</b></span><span>Pairs <b class="tabular" id="mPairs">0</b>/'+MEM_ICONS.length+'</span></div>' +
+      '<div class="memory-grid" id="memGrid"></div>';
+    var grid = document.getElementById('memGrid');
+    var movesEl = document.getElementById('mMoves');
+    var pairsEl = document.getElementById('mPairs');
+    var moves = 0, pairs = 0, flipped = [], lock = false;
+
+    deck.forEach(function(card, idx){
+      var el = document.createElement('div');
+      el.className = 'mem-card';
+      el.dataset.idx = idx;
+      el.innerHTML = '<div class="mem-card-inner"><div class="mem-face mem-front">❓</div><div class="mem-face mem-back">'+card.icon+'</div></div>';
+      grid.appendChild(el);
+      el.addEventListener('click', function(){
+        if(lock || el.classList.contains('flipped') || el.classList.contains('matched')) return;
+        el.classList.add('flipped');
+        flipped.push({el:el, icon:card.icon});
+        beep(500,.06,'sine');
+        if(flipped.length===2){
+          moves++; movesEl.textContent = moves;
+          lock = true;
+          setTimeout(function(){
+            if(flipped[0].icon === flipped[1].icon){
+              flipped[0].el.classList.add('matched');
+              flipped[1].el.classList.add('matched');
+              pairs++; pairsEl.textContent = pairs;
+              beep(760,.12,'triangle');
+              if(pairs===MEM_ICONS.length) finishMemory(moves);
+            } else {
+              flipped[0].el.classList.remove('flipped');
+              flipped[1].el.classList.remove('flipped');
+              beep(200,.1,'square');
+            }
+            flipped = []; lock = false;
+          }, 650);
+        }
+      });
+    });
+
+    function finishMemory(moves){
+      var earned = Math.max(5, Math.min(30, 30 - moves));
+      earnPoints(earned);
+      if(!state.best.memory || moves < state.best.memory) state.best.memory = moves;
+      saveState(); refreshTopbar();
+      playFanfare();
+      setTimeout(function(){
+        stageEl.insertAdjacentHTML('beforeend',
+          '<div class="card" style="text-align:center; margin-top:12px;">' +
+            '<h2 style="margin:0;">All Matched!</h2>' +
+            '<p style="color:var(--dim); margin:4px 0;">Moves <b class="tabular" style="color:var(--cream);">'+moves+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
+            '<button class="btn btn-primary" id="memAgain" style="width:100%;">Play Again</button>' +
+            '<button class="btn btn-ghost" id="memDone" style="width:100%; margin-top:8px;">Back to Mini-Games</button>' +
+          '</div>'
+        );
+        document.getElementById('memAgain').addEventListener('click', runMemory);
+        document.getElementById('memDone').addEventListener('click', renderArcadeHub);
+      }, 300);
+    }
+
+    activeCleanup = null;
+  }
+
+  // ---------------- STAR CATCH ----------------
+  var CATCH_TIME = 40;
+  function renderCatchIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Star Catch</div>' +
+        '<h2 style="margin:4px 0;">Catch stars, dodge Gloomlings</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Move left and right to catch falling stars. Steer clear of the Gloomlings — catching one costs you points!</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.catch+'</b></div>' +
+        '<button class="btn btn-primary" id="startCatch" style="margin-top:12px; width:100%;">Start Catching</button>' +
+        '<button class="btn btn-ghost" id="backArcadeCatch" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startCatch').addEventListener('click', runCatch);
+    document.getElementById('backArcadeCatch').addEventListener('click', renderArcadeHub);
+  }
+
+  function runCatch(){
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span>Score <b class="tabular" id="ctScore">0</b></span><span id="ctTime" class="tabular">'+CATCH_TIME+'s</span></div>' +
+      '<div class="battle-wrap"><canvas id="catchCanvas" width="400" height="480"></canvas></div>' +
+      '<div class="brawl-controls">' +
+        '<div class="brawl-btn" id="ctLeft">◀</div>' +
+        '<div class="brawl-btn" id="ctRight">▶</div>' +
+      '</div>';
+    var canvas = document.getElementById('catchCanvas');
+    var ctx = canvas.getContext('2d');
+    var scoreEl = document.getElementById('ctScore');
+    var timeEl = document.getElementById('ctTime');
+    var W = canvas.width, H = canvas.height;
+    var BASKET_Y = H - 46;
+
+    var running = true, rafId = null, timerId = null;
+    var timeLeft = CATCH_TIME, score = 0, combo = 0;
+    var basketX = W/2, keysDown = {left:false, right:false};
+    var items = [], lastSpawn = 0, flashTimer = 0;
+    var particles = [];
+    var stars = makeStarfield(30, W, BASKET_Y-20);
+    var demonColors = ['#52E8C6','#8E7CFF','#FF8B5E','#FFD36E'];
+
+    function drawStar(cx,cy,r,color){
+      ctx.save();
+      ctx.translate(cx,cy);
+      ctx.beginPath();
+      for(var i=0;i<10;i++){
+        var rad = i%2===0 ? r : r*0.45;
+        var ang = Math.PI/5*i - Math.PI/2;
+        var x = Math.cos(ang)*rad, y = Math.sin(ang)*rad;
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.restore();
+    }
+    function spawnItem(){
+      var isStar = Math.random() < 0.7;
+      items.push({
+        x: 24 + Math.random()*(W-48),
+        y: -16,
+        r: isStar ? 13 : 22,
+        type: isStar ? 'star' : 'gloomling',
+        color: demonColors[Math.floor(Math.random()*demonColors.length)],
+        speed: 1.4 + Math.random()*1.2 + Math.min(1.6, (CATCH_TIME-timeLeft)/20)
+      });
+    }
+    function spawnParticles(x,y,color){
+      for(var i=0;i<8;i++){
+        var ang = Math.random()*Math.PI*2;
+        particles.push({x:x,y:y,vx:Math.cos(ang)*3,vy:Math.sin(ang)*3,life:18,color:color});
+      }
+    }
+    function drawBasket(){
+      var sprite = getPlayerSprite(state.equipped, state.equippedWeapon);
+      var w=52, h=72;
+      ctx.drawImage(sprite, basketX-w/2, BASKET_Y-h, w, h);
+    }
+
+    function frame(ts){
+      if(!running) return;
+      ctx.fillStyle = flashTimer>0 ? 'rgba(255,95,162,.12)' : '#0F0A22';
+      ctx.fillRect(0,0,W,H);
+      drawStarfield(ctx, stars, ts);
+      if(flashTimer>0) flashTimer--;
+
+      if(keysDown.left) basketX -= 4;
+      if(keysDown.right) basketX += 4;
+      basketX = Math.max(28, Math.min(W-28, basketX));
+
+      if(ts - lastSpawn > Math.max(360, 780 - (CATCH_TIME-timeLeft)*10)){
+        spawnItem(); lastSpawn = ts;
+      }
+      for(var i=items.length-1;i>=0;i--){
+        var it = items[i];
+        it.y += it.speed;
+        if(it.type==='star') drawStar(it.x, it.y, it.r, '#FFC15E');
+        else ctx.drawImage(getGloomlingSprite(it.color), it.x-it.r, it.y-it.r, it.r*2, it.r*2);
+
+        var caught = Math.abs(it.x-basketX) < 34 && it.y > BASKET_Y-18 && it.y < BASKET_Y+18;
+        if(caught){
+          if(it.type==='star'){
+            combo++; score += 1 + Math.floor(combo/5);
+            spawnParticles(it.x, it.y, '#FFC15E');
+            beep(700+combo*6, .08, 'triangle');
+          } else {
+            combo = 0; score = Math.max(0, score-3); flashTimer = 14;
+            spawnParticles(it.x, it.y, '#8E7CFF');
+            beep(160,.16,'sawtooth');
+          }
+          scoreEl.textContent = score;
+          items.splice(i,1);
+          continue;
+        }
+        if(it.y - it.r > H){
+          if(it.type==='star') combo = 0;
+          items.splice(i,1);
+        }
+      }
+      drawBasket();
+      for(var p=particles.length-1;p>=0;p--){
+        var pt = particles[p];
+        pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.12; pt.life--;
+        ctx.globalAlpha = Math.max(0,pt.life/18);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,3,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+        if(pt.life<=0) particles.splice(p,1);
+      }
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function onKeyDown(e){
+      var k = e.key.toLowerCase();
+      if(k==='arrowleft'||k==='a') keysDown.left = true;
+      if(k==='arrowright'||k==='d') keysDown.right = true;
+    }
+    function onKeyUp(e){
+      var k = e.key.toLowerCase();
+      if(k==='arrowleft'||k==='a') keysDown.left = false;
+      if(k==='arrowright'||k==='d') keysDown.right = false;
+    }
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    var btnLeft = document.getElementById('ctLeft');
+    var btnRight = document.getElementById('ctRight');
+    function holdStart(dir){ return function(ev){ ev.preventDefault(); keysDown[dir]=true; }; }
+    function holdEnd(dir){ return function(){ keysDown[dir]=false; }; }
+    btnLeft.addEventListener('pointerdown', holdStart('left'));
+    btnRight.addEventListener('pointerdown', holdStart('right'));
+    ['pointerup','pointerleave','pointercancel'].forEach(function(ev){
+      btnLeft.addEventListener(ev, holdEnd('left'));
+      btnRight.addEventListener(ev, holdEnd('right'));
+    });
+
+    timerId = setInterval(function(){
+      timeLeft--;
+      timeEl.textContent = timeLeft + 's';
+      if(timeLeft<=0) endCatch();
+    }, 1000);
+    rafId = requestAnimationFrame(frame);
+
+    function endCatch(){
+      running = false;
+      clearInterval(timerId);
+      cancelAnimationFrame(rafId);
+      var earned = Math.max(5, Math.round(score/2));
+      earnPoints(earned);
+      if(score > state.best.catch) state.best.catch = score;
+      saveState(); refreshTopbar();
+      playFanfare();
+      var wrap = stageEl.querySelector('.battle-wrap');
+      wrap.insertAdjacentHTML('beforeend',
+        '<div class="overlay-center">' +
+          '<h2 style="margin:0;">Time’s Up!</h2>' +
+          '<p style="color:var(--dim); margin:0;">Score <b class="tabular" style="color:var(--cream);">'+score+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
+          '<button class="btn btn-primary" id="catchAgain">Catch Again</button>' +
+          '<button class="btn btn-ghost" id="catchDone">Back to Mini-Games</button>' +
+        '</div>'
+      );
+      document.getElementById('catchAgain').addEventListener('click', runCatch);
+      document.getElementById('catchDone').addEventListener('click', renderArcadeHub);
+    }
+
+    activeCleanup = function(){
+      running = false;
+      clearInterval(timerId);
+      if(rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }
+
+  // ---------------- LANTERN SAYS (Simon-style sequence memory) ----------------
+  var LANTERN_SAYS_COLORS = ['#FFC15E','#52E8C6','#FF5FA2','#8E7CFF'];
+  var LANTERN_SAYS_NOTES = [PENTA[0], PENTA[3], PENTA[6], PENTA[9]];
+
+  function renderLanternIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Lantern Says</div>' +
+        '<h2 style="margin:4px 0;">Watch, then repeat</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">The lanterns light up in a pattern. Tap them back in the same order — the pattern grows by one each round.</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best round: <b class="tabular" style="color:var(--amber);">'+state.best.lantern+'</b></div>' +
+        '<button class="btn btn-primary" id="startLantern" style="margin-top:12px; width:100%;">Start</button>' +
+        '<button class="btn btn-ghost" id="backArcadeLantern" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startLantern').addEventListener('click', runLanternSays);
+    document.getElementById('backArcadeLantern').addEventListener('click', renderArcadeHub);
+  }
+
+  function runLanternSays(){
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span>Round <b class="tabular" id="lsRound">0</b></span><span>Best <b class="tabular" id="lsBest">'+state.best.lantern+'</b></span></div>' +
+      '<div class="lantern-says-grid" id="lsGrid">' +
+        [0,1,2,3].map(function(i){ return '<button class="ls-lantern" data-i="'+i+'" style="--lc:'+LANTERN_SAYS_COLORS[i]+'" disabled>🏮</button>'; }).join('') +
+      '</div>' +
+      '<div class="ls-status" id="lsStatus">Get ready...</div>';
+
+    var buttons = stageEl.querySelectorAll('.ls-lantern');
+    var statusEl = document.getElementById('lsStatus');
+    var roundEl = document.getElementById('lsRound');
+    var sequence = [], playerIndex = 0, accepting = false, ended = false;
+
+    function setDisabled(disabled){
+      Array.prototype.forEach.call(buttons, function(b){ b.disabled = disabled; });
+    }
+    function flashLantern(i, dur){
+      buttons[i].classList.add('active');
+      beep(noteFreq(LANTERN_SAYS_NOTES[i]), .3, 'triangle');
+      setTimeout(function(){ buttons[i].classList.remove('active'); }, dur);
+    }
+    function playSequence(onDone){
+      var i = 0;
+      function step(){
+        if(ended) return;
+        if(i >= sequence.length){ onDone(); return; }
+        flashLantern(sequence[i], 420);
+        i++;
+        setTimeout(step, 600);
+      }
+      setTimeout(step, 400);
+    }
+    function nextRound(){
+      sequence.push(Math.floor(Math.random()*4));
+      roundEl.textContent = sequence.length;
+      playerIndex = 0;
+      accepting = false;
+      setDisabled(true);
+      statusEl.textContent = 'Watch the pattern...';
+      playSequence(function(){
+        if(ended) return;
+        accepting = true;
+        setDisabled(false);
+        statusEl.textContent = 'Your turn — repeat it!';
+      });
+    }
+
+    Array.prototype.forEach.call(buttons, function(btn, i){
+      btn.addEventListener('click', function(){
+        if(!accepting || ended) return;
+        flashLantern(i, 220);
+        if(sequence[playerIndex] === i){
+          playerIndex++;
+          if(playerIndex === sequence.length){
+            accepting = false;
+            setDisabled(true);
+            statusEl.textContent = 'Nice! Next pattern...';
+            setTimeout(nextRound, 700);
+          }
+        } else {
+          accepting = false;
+          setDisabled(true);
+          endLanternSays();
+        }
+      });
+    });
+
+    function endLanternSays(){
+      ended = true;
+      var roundsCleared = sequence.length - 1;
+      var earned = Math.max(5, roundsCleared*3);
+      earnPoints(earned);
+      if(roundsCleared > state.best.lantern) state.best.lantern = roundsCleared;
+      saveState(); refreshTopbar();
+      beep(160,.2,'sawtooth');
+      if(roundsCleared > 0) playFanfare();
+      statusEl.innerHTML =
+        'Pattern broken! You cleared <b class="tabular" style="color:var(--cream);">'+roundsCleared+'</b> round'+(roundsCleared===1?'':'s')+
+        ' · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b>';
+      var wrap = document.createElement('div');
+      wrap.style.marginTop = '14px';
+      wrap.innerHTML =
+        '<button class="btn btn-primary" id="lsAgain" style="width:100%;">Play Again</button>' +
+        '<button class="btn btn-ghost" id="lsDone" style="width:100%; margin-top:8px;">Back to Mini-Games</button>';
+      stageEl.appendChild(wrap);
+      document.getElementById('lsAgain').addEventListener('click', runLanternSays);
+      document.getElementById('lsDone').addEventListener('click', renderArcadeHub);
+    }
+
+    nextRound();
+    activeCleanup = function(){ ended = true; };
+  }
+
+  // ---------------- STUDY HALL ----------------
+  var QUIZ_ROUND_LENGTH = {math:8, grammar:5, reading:3};
+  function subjectLabel(subject){
+    return subject==='math' ? 'Math' : subject==='grammar' ? 'Grammar' : 'Reading';
+  }
+
+  function renderStudyHub(){
+    var grades = [1,2,3,4,5];
+    var pillsHtml = grades.map(function(g){
+      return '<button class="subtab '+(g===state.grade?'active':'')+'" data-grade="'+g+'">Grade '+g+'</button>';
+    }).join('');
+    stageEl.innerHTML =
+      '<div class="eyebrow">Study Hall</div>' +
+      '<h2 style="margin:2px 0 8px;">Trainee Lessons</h2>' +
+      '<div class="subtabs">'+pillsHtml+'</div>' +
+      '<p style="font-size:11.5px;color:var(--dim);margin:8px 0 10px;">Correct answers earn Star Points toward new outfits and battle weapons.</p>' +
+      '<div class="arcade-grid">' +
+        '<div class="card arcade-card" data-subject="math"><div class="ico">➗</div><h3>Math</h3><p>Add, subtract, multiply, divide.</p><div class="best">Best '+state.best.study.math+'/'+QUIZ_ROUND_LENGTH.math+'</div></div>' +
+        '<div class="card arcade-card" data-subject="grammar"><div class="ico">✏️</div><h3>Grammar</h3><p>Nouns, verbs, tricky sentences.</p><div class="best">Best '+state.best.study.grammar+'/'+QUIZ_ROUND_LENGTH.grammar+'</div></div>' +
+        '<div class="card arcade-card" data-subject="reading" style="grid-column:1/-1;"><div class="ico">📖</div><h3>Reading</h3><p>Short stories, then a question.</p><div class="best">Best '+state.best.study.reading+'/'+QUIZ_ROUND_LENGTH.reading+'</div></div>' +
+      '</div>';
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-grade]'), function(btn){
+      btn.addEventListener('click', function(){
+        state.grade = parseInt(btn.dataset.grade, 10);
+        saveState();
+        renderStudyHub();
+      });
+    });
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-subject]'), function(el){
+      el.addEventListener('click', function(){ runQuiz(el.dataset.subject); });
+    });
+  }
+
+  function runQuiz(subject){
+    var length = QUIZ_ROUND_LENGTH[subject];
+    var questions;
+    if(subject==='math'){
+      questions = [];
+      for(var i=0;i<length;i++){ questions.push(generateMathQuestion(state.grade)); }
+    } else if(subject==='grammar'){
+      questions = shuffleArray(GRAMMAR_BANK[state.grade].slice()).slice(0, length);
+    } else {
+      questions = shuffleArray(READING_BANK[state.grade].slice()).slice(0, length);
+    }
+    var qIndex = 0, correctCount = 0, earnedThisRound = 0;
+
+    function renderQuestion(){
+      var item = questions[qIndex];
+      var choices = shuffleArray(item.choices.slice());
+      var passageHtml = item.passage ? '<div class="quiz-passage">'+item.passage+'</div>' : '';
+      stageEl.innerHTML =
+        '<div class="battle-hud"><span>'+subjectLabel(subject)+' · Grade '+state.grade+'</span><span>Question <b class="tabular">'+(qIndex+1)+'</b>/'+length+'</span></div>' +
+        '<div class="card">' +
+          passageHtml +
+          '<h3 style="margin:0 0 10px;font-size:15px;text-wrap:balance;">'+item.q+'</h3>' +
+          '<div class="quiz-choices">' +
+            choices.map(function(c){ return '<button class="quiz-choice">'+c+'</button>'; }).join('') +
+          '</div>' +
+          '<div class="quiz-feedback" id="quizFeedback"></div>' +
+        '</div>';
+      var buttons = stageEl.querySelectorAll('.quiz-choice');
+      Array.prototype.forEach.call(buttons, function(btn, i){
+        btn.addEventListener('click', function(){ handleAnswer(choices[i], item.answer, buttons); });
+      });
+    }
+
+    function handleAnswer(picked, correctAnswer, buttons){
+      Array.prototype.forEach.call(buttons, function(btn){
+        btn.disabled = true;
+        if(btn.textContent===correctAnswer) btn.classList.add('correct');
+        else if(btn.textContent===picked) btn.classList.add('incorrect');
+      });
+      var feedback = document.getElementById('quizFeedback');
+      var isCorrect = picked===correctAnswer;
+      if(isCorrect){
+        correctCount++;
+        earnPoints(3); earnedThisRound += 3;
+        saveState(); refreshTopbar();
+        feedback.textContent = 'Correct! +3 ⭐';
+        feedback.style.color = 'var(--teal)';
+        beep(760,.12,'triangle');
+      } else {
+        feedback.textContent = 'Not quite — the answer is "'+correctAnswer+'".';
+        feedback.style.color = 'var(--pink)';
+        beep(180,.12,'square');
+      }
+      var nextBtn = document.createElement('button');
+      nextBtn.className = 'btn btn-primary';
+      nextBtn.style.marginTop = '12px';
+      nextBtn.style.width = '100%';
+      nextBtn.textContent = (qIndex < length-1) ? 'Next Question' : 'See Results';
+      nextBtn.addEventListener('click', function(){
+        qIndex++;
+        if(qIndex < length) renderQuestion(); else finishQuiz();
+      });
+      stageEl.querySelector('.card').appendChild(nextBtn);
+    }
+
+    function finishQuiz(){
+      if(correctCount > state.best.study[subject]) state.best.study[subject] = correctCount;
+      saveState(); refreshTopbar();
+      if(correctCount === length) playFanfare();
+      stageEl.innerHTML =
+        '<div class="card" style="text-align:center;">' +
+          '<h2 style="margin:0;">Nice work!</h2>' +
+          '<p style="color:var(--dim); margin:6px 0;">You got <b class="tabular" style="color:var(--cream);">'+correctCount+'</b>/'+length+' correct · Earned <b class="tabular" style="color:var(--amber);">⭐'+earnedThisRound+'</b></p>' +
+          '<button class="btn btn-primary" id="quizAgain" style="width:100%;">Study Again</button>' +
+          '<button class="btn btn-ghost" id="quizDone" style="width:100%; margin-top:8px;">Back to Study Hall</button>' +
+        '</div>';
+      document.getElementById('quizAgain').addEventListener('click', function(){ runQuiz(subject); });
+      document.getElementById('quizDone').addEventListener('click', renderStudyHub);
+    }
+
+    renderQuestion();
+  }
+
+  setScreen(state.hunter ? 'home' : 'select-hunter');
+})();
+</script>
