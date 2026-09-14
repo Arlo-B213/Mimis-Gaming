@@ -376,6 +376,25 @@
   .ls-lantern:disabled{ cursor:default; }
   .ls-status{ text-align:center; margin-top:14px; color:var(--dim); font-size:13px; min-height:20px; }
 
+  .whack-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:14px; }
+  .whack-hole{
+    position:relative; aspect-ratio:1; border-radius:50%; overflow:hidden;
+    background:radial-gradient(circle at 50% 65%, #1A1330, #05030C 72%);
+    border:3px solid rgba(255,255,255,.08); cursor:pointer;
+  }
+  .whack-hole:active{ transform:scale(.96); }
+  .whack-mole{
+    position:absolute; left:50%; bottom:6%; width:72%; height:72%;
+    transform:translate(-50%, 60%);
+    transition:transform .12s ease-out;
+    pointer-events:none;
+    opacity:0;
+  }
+  .whack-hole.up .whack-mole{ transform:translate(-50%, 0%); opacity:1; }
+  .whack-hole.shiny{ box-shadow:0 0 18px rgba(255,211,110,.6) inset; }
+  .whack-hole.shiny .whack-mole{ filter:drop-shadow(0 0 10px #FFD36E); }
+  .whack-hole.bonked .whack-mole{ transform:translate(-50%, 60%) scale(.8); opacity:0; }
+
   .quiz-passage{
     background:var(--panel-soft-2); border-radius:12px; padding:10px 12px;
     font-size:12.5px; line-height:1.55; margin-bottom:12px; color:var(--cream);
@@ -1642,7 +1661,7 @@
     unlocked: ['starter'],
     equipped: 'starter',
     affection: {hae:0, bit:0, nun:0, sol:0, rae:0, suna:0, yumi:0},
-    best: {battle:0, rhythm:0, memory:0, brawl:0, catch:0, lantern:0, comet:0, study:{math:0, grammar:0, reading:0}},
+    best: {battle:0, rhythm:0, memory:0, brawl:0, catch:0, lantern:0, comet:0, whack:0, study:{math:0, grammar:0, reading:0}},
     soundOn: true,
     grade: 3,
     unlockedWeapons: ['glowstick'],
@@ -1903,6 +1922,11 @@
       bpm: 152, stepsPerBeat: 2,
       melody: [9,8,6,8, 9,10,9,8, 6,8,9,10, 9,8,6,null],
       bass:   [0,0,0,null, 0,0,0,null, 0,0,0,null, 0,0,0,null]
+    },
+    whack: {
+      bpm: 140, stepsPerBeat: 2,
+      melody: [0,4,0,5, 0,4,0,6, 0,4,0,5, 4,2,0,null],
+      bass:   [0,null,0,null, 0,null,0,null, 0,null,0,null, 0,null,0,null]
     }
   };
   var musicTimer = null, musicStep = 0, musicKind = null;
@@ -3164,6 +3188,7 @@
         '<div class="card arcade-card" data-game="catch"><div class="ico">⭐</div><h3>Star Catch</h3><p>Move to catch stars, dodge Gloomlings.</p><div class="best">Best '+state.best.catch+'</div></div>' +
         '<div class="card arcade-card" data-game="lantern"><div class="ico">🏮</div><h3>Lantern Says</h3><p>Watch the pattern, repeat it back.</p><div class="best">Best '+state.best.lantern+'</div></div>' +
         '<div class="card arcade-card" data-game="comet"><div class="ico">☄️</div><h3>Comet Dash</h3><p>Switch lanes, dodge Gloomlings, chain glowsticks.</p><div class="best">Best '+state.best.comet+'</div></div>' +
+        '<div class="card arcade-card" data-game="whack"><div class="ico">🔨</div><h3>Whack-a-Gloomling</h3><p>Tap the Gloomlings before they duck back down.</p><div class="best">Best '+state.best.whack+'</div></div>' +
       '</div>';
     Array.prototype.forEach.call(stageEl.querySelectorAll('[data-game]'), function(el){
       el.addEventListener('click', function(){
@@ -3172,6 +3197,7 @@
         else if(g==='memory') renderMemoryIntro();
         else if(g==='catch') renderCatchIntro();
         else if(g==='comet') renderCometIntro();
+        else if(g==='whack') renderWhackIntro();
         else renderLanternIntro();
       });
     });
@@ -3894,6 +3920,136 @@
       running = false;
       if(rafId) cancelAnimationFrame(rafId);
       window.removeEventListener('keydown', onKeyDown);
+    };
+  }
+
+  // ---------------- WHACK-A-GLOOMLING ----------------
+  var WHACK_TIME = 35;
+  var WHACK_HOLES = 9;
+
+  function renderWhackIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Whack-a-Gloomling</div>' +
+        '<h2 style="margin:4px 0;">Tap fast, they don\'t wait around</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Gloomlings pop up across the alley grates. Tap them before they duck back down. Golden Gloomlings are worth triple — and it only gets faster.</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.whack+'</b></div>' +
+        '<button class="btn btn-primary" id="startWhack" style="margin-top:12px; width:100%;">Start Whacking</button>' +
+        '<button class="btn btn-ghost" id="backArcadeWhack" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startWhack').addEventListener('click', runWhack);
+    document.getElementById('backArcadeWhack').addEventListener('click', renderArcadeHub);
+  }
+
+  function runWhack(){
+    startMusic('whack');
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span>Score <b class="tabular" id="wkScore">0</b></span><span id="wkTime" class="tabular">'+WHACK_TIME+'s</span></div>' +
+      '<div class="battle-wrap" style="padding:14px;"><div class="whack-grid" id="wkGrid"></div></div>';
+    var grid = document.getElementById('wkGrid');
+    var scoreEl = document.getElementById('wkScore');
+    var timeEl = document.getElementById('wkTime');
+    var demonColors = ['#52E8C6','#8E7CFF','#FF8B5E','#FFD36E'];
+
+    var holes = [];
+    for(var i=0;i<WHACK_HOLES;i++){
+      var holeEl = document.createElement('div');
+      holeEl.className = 'whack-hole';
+      holeEl.innerHTML = '<img class="whack-mole" alt="">';
+      grid.appendChild(holeEl);
+      var h = { el: holeEl, img: holeEl.querySelector('img'), up:false, shiny:false, timeout:null };
+      holeEl.addEventListener('pointerdown', function(ev){
+        ev.preventDefault();
+        var hh = holes[Array.prototype.indexOf.call(grid.children, ev.currentTarget)];
+        if(hh.up) whackHit(hh);
+      });
+      holes.push(h);
+    }
+
+    var running = true, timeLeft = WHACK_TIME, score = 0, combo = 0, elapsed = 0;
+    var spawnTimerId = null, countdownId = null;
+
+    function randomEmptyHole(){
+      var empties = holes.filter(function(hh){ return !hh.up; });
+      if(!empties.length) return null;
+      return empties[Math.floor(Math.random()*empties.length)];
+    }
+
+    function popUp(){
+      if(!running) return;
+      var h = randomEmptyHole();
+      if(h){
+        var shiny = Math.random() < 0.16;
+        var color = shiny ? '#FFD36E' : demonColors[Math.floor(Math.random()*demonColors.length)];
+        h.up = true; h.shiny = shiny;
+        h.el.classList.remove('bonked');
+        h.el.classList.add('up');
+        h.el.classList.toggle('shiny', shiny);
+        h.img.src = getGloomlingSprite(color).toDataURL();
+        var upDuration = Math.max(500, 1100 - elapsed*8);
+        h.timeout = setTimeout(function(){ missHole(h); }, upDuration);
+      }
+      var spawnGap = Math.max(380, 900 - elapsed*10);
+      spawnTimerId = setTimeout(popUp, spawnGap);
+    }
+
+    function missHole(h){
+      h.up = false;
+      h.el.classList.remove('up','shiny');
+      combo = 0;
+    }
+
+    function whackHit(h){
+      clearTimeout(h.timeout);
+      var gained = (h.shiny ? 3 : 1) + Math.floor(combo/5);
+      combo++;
+      score += gained;
+      scoreEl.textContent = score;
+      beep(h.shiny ? 900 : 620 + combo*4, .08, 'triangle');
+      h.el.classList.add('bonked');
+      setTimeout(function(){
+        h.up = false;
+        h.el.classList.remove('up','shiny','bonked');
+      }, 140);
+    }
+
+    countdownId = setInterval(function(){
+      timeLeft--; elapsed++;
+      timeEl.textContent = timeLeft + 's';
+      if(timeLeft<=0) endWhack();
+    }, 1000);
+
+    spawnTimerId = setTimeout(popUp, 500);
+
+    function endWhack(){
+      if(!running) return;
+      running = false;
+      clearInterval(countdownId);
+      clearTimeout(spawnTimerId);
+      holes.forEach(function(h){ clearTimeout(h.timeout); });
+      var earned = Math.max(5, Math.round(score/2));
+      earnPoints(earned);
+      if(score > state.best.whack) state.best.whack = score;
+      saveState(); refreshTopbar();
+      playFanfare();
+      var wrap = stageEl.querySelector('.battle-wrap');
+      wrap.insertAdjacentHTML('beforeend',
+        '<div class="overlay-center">' +
+          '<h2 style="margin:0;">Time\'s Up!</h2>' +
+          '<p style="color:var(--dim); margin:0;">Score <b class="tabular" style="color:var(--cream);">'+score+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
+          '<button class="btn btn-primary" id="whackAgain">Whack Again</button>' +
+          '<button class="btn btn-ghost" id="whackDone">Back to Mini-Games</button>' +
+        '</div>'
+      );
+      document.getElementById('whackAgain').addEventListener('click', runWhack);
+      document.getElementById('whackDone').addEventListener('click', renderArcadeHub);
+    }
+
+    activeCleanup = function(){
+      running = false;
+      clearInterval(countdownId);
+      clearTimeout(spawnTimerId);
+      holes.forEach(function(h){ clearTimeout(h.timeout); });
     };
   }
 
