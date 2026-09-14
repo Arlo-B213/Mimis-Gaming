@@ -1849,10 +1849,60 @@
       melody: [2,null,4,5, 2,null,1,2, 4,null,5,6, 4,2,1,null],
       bass:   [0,null,null,null, 0,null,null,null, null,null,null,null, 0,null,null,null]
     },
+    clubhouse: {
+      bpm: 84, stepsPerBeat: 2,
+      melody: [4,null,6,4, 2,null,4,2, 5,null,6,8, 6,4,2,null],
+      bass:   [0,null,null,0, null,null,0,null, 0,null,null,0, null,null,0,null]
+    },
+    study: {
+      bpm: 100, stepsPerBeat: 2,
+      melody: [0,2,4,2, 0,2,4,5, 4,2,0,2, 4,5,4,null],
+      bass:   [0,null,0,null, 0,null,0,null, 0,null,0,null, 0,null,0,null]
+    },
     battle: {
       bpm: 130, stepsPerBeat: 2,
       melody: [6,5,4,5, 6,8,6,5, 4,5,6,8, 6,5,4,2],
       bass:   [0,null,0,null, 0,null,0,null, 0,null,0,null, 0,null,0,null]
+    },
+    zap: {
+      bpm: 148, stepsPerBeat: 2,
+      melody: [8,6,8,9, 8,6,5,6, 8,9,10,9, 8,6,5,null],
+      bass:   [0,0,null,0, 0,0,null,0, 0,0,null,0, 0,0,null,0]
+    },
+    brawl: {
+      bpm: 122, stepsPerBeat: 2,
+      melody: [0,0,4,0, 5,5,4,0, 0,0,4,0, 6,5,4,2],
+      bass:   [0,null,0,0, null,0,null,0, 0,null,0,0, null,0,null,0]
+    },
+    arcade: {
+      bpm: 138, stepsPerBeat: 2,
+      melody: [4,6,9,6, 4,6,9,10, 9,6,4,6, 4,2,4,null],
+      bass:   [0,null,null,0, null,null,0,null, 0,null,null,0, null,null,0,null]
+    },
+    rhythm: {
+      bpm: 126, stepsPerBeat: 2,
+      melody: [2,4,6,4, 2,4,6,9, 6,4,2,4, 6,4,2,null],
+      bass:   [0,null,0,null, 0,null,0,null, 0,null,0,null, 0,null,0,null]
+    },
+    memory: {
+      bpm: 88, stepsPerBeat: 2,
+      melody: [6,null,4,null, 2,null,4,null, 5,null,6,null, 4,null,2,null],
+      bass:   [0,null,null,null, null,null,0,null, 0,null,null,null, null,null,0,null]
+    },
+    catch: {
+      bpm: 132, stepsPerBeat: 2,
+      melody: [4,5,6,8, 6,5,4,5, 4,5,6,8, 9,8,6,null],
+      bass:   [0,null,0,null, 0,null,0,null, 0,null,0,null, 0,null,0,null]
+    },
+    lantern: {
+      bpm: 92, stepsPerBeat: 2,
+      melody: [0,null,2,null, 4,null,2,null, 0,null,5,null, 4,null,2,null],
+      bass:   [0,null,null,null, 0,null,null,null, 0,null,null,null, 0,null,null,null]
+    },
+    comet: {
+      bpm: 152, stepsPerBeat: 2,
+      melody: [9,8,6,8, 9,10,9,8, 6,8,9,10, 9,8,6,null],
+      bass:   [0,0,0,null, 0,0,0,null, 0,0,0,null, 0,0,0,null]
     }
   };
   var musicTimer = null, musicStep = 0, musicKind = null;
@@ -1937,7 +1987,8 @@
     else if(name==='arcade') renderArcadeHub();
     else if(name==='study') renderStudyHub();
     refreshTopbar();
-    startMusic(name==='battle' || name==='arcade' ? 'battle' : 'home');
+    var screenMusic = {home:'home', clubhouse:'clubhouse', battle:'battle', arcade:'arcade', study:'study'};
+    startMusic(screenMusic[name] || 'home');
   }
 
   Array.prototype.forEach.call(tabbarEl.querySelectorAll('.tab-btn'), function(btn){
@@ -2091,6 +2142,7 @@
 
   // ---------------- CLUBHOUSE ----------------
   function renderClubhouse(sub){
+    startMusic('clubhouse');
     stageEl.innerHTML =
       '<div class="subtabs">' +
         '<button class="subtab" data-sub="closet">Closet</button>' +
@@ -2439,6 +2491,7 @@
   var BATTLE_TIME = 45;
 
   function renderBattleHub(){
+    startMusic('battle');
     stageEl.innerHTML =
       '<div class="eyebrow">Battle Arena</div>' +
       '<h2 style="margin:2px 0 4px;">Pick a patrol</h2>' +
@@ -2469,6 +2522,7 @@
   }
 
   function runBattle(){
+    startMusic('zap');
     stageEl.innerHTML =
       '<div class="battle-hud"><span>Score <b class="tabular" id="bScore">0</b></span><span id="bTime" class="tabular">'+BATTLE_TIME+'s</span></div>' +
       '<div class="battle-wrap"><canvas id="battleCanvas" width="400" height="480"></canvas></div>';
@@ -2706,6 +2760,7 @@
   }
 
   function runBrawl(){
+    startMusic('brawl');
     stageEl.innerHTML =
       '<div class="battle-hud"><span class="hearts-row" id="brHearts">❤️❤️❤️</span><span id="brWave">'+BRAWL_LEVELS[0].name+' · Wave 1/'+BRAWL_WAVES_PER_LEVEL+'</span><span>Score <b class="tabular" id="brScore">0</b></span></div>' +
       '<div class="battle-wrap brawl-arena"><canvas id="brawlCanvas" width="400" height="380"></canvas></div>' +
@@ -3099,6 +3154,7 @@
 
   // ---------------- ARCADE HUB ----------------
   function renderArcadeHub(){
+    startMusic('arcade');
     stageEl.innerHTML =
       '<div class="eyebrow">Mini-Games</div>' +
       '<h2 style="margin:2px 0 4px;">Pick a game</h2>' +
@@ -3137,6 +3193,7 @@
   }
 
   function runRhythm(){
+    startMusic('rhythm');
     stageEl.innerHTML =
       '<div class="battle-hud"><span>Score <b class="tabular" id="rScore">0</b></span><span id="rJudge">Get ready…</span></div>' +
       '<div class="battle-wrap"><canvas id="rhythmCanvas" width="360" height="440"></canvas></div>' +
@@ -3269,6 +3326,7 @@
   }
 
   function runMemory(){
+    startMusic('memory');
     var deck = MEM_ICONS.concat(MEM_ICONS).map(function(icon,i){ return {icon:icon, id:i}; });
     for(var i=deck.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var t=deck[i]; deck[i]=deck[j]; deck[j]=t; }
 
@@ -3352,6 +3410,7 @@
   }
 
   function runCatch(){
+    startMusic('catch');
     stageEl.innerHTML =
       '<div class="battle-hud"><span>Score <b class="tabular" id="ctScore">0</b></span><span id="ctTime" class="tabular">'+CATCH_TIME+'s</span></div>' +
       '<div class="battle-wrap"><canvas id="catchCanvas" width="400" height="480"></canvas></div>' +
@@ -3546,6 +3605,7 @@
   }
 
   function runLanternSays(){
+    startMusic('lantern');
     stageEl.innerHTML =
       '<div class="battle-hud"><span>Round <b class="tabular" id="lsRound">0</b></span><span>Best <b class="tabular" id="lsBest">'+state.best.lantern+'</b></span></div>' +
       '<div class="lantern-says-grid" id="lsGrid">' +
@@ -3654,6 +3714,7 @@
   }
 
   function runCometDash(){
+    startMusic('comet');
     stageEl.innerHTML =
       '<div class="battle-hud"><span>Score <b class="tabular" id="cdScore">0</b></span><span id="cdLives">❤️❤️❤️</span></div>' +
       '<div class="battle-wrap"><canvas id="cometCanvas" width="360" height="480"></canvas></div>' +
@@ -3843,6 +3904,7 @@
   }
 
   function renderStudyHub(){
+    startMusic('study');
     var grades = [1,2,3,4,5];
     var pillsHtml = grades.map(function(g){
       return '<button class="subtab '+(g===state.grade?'active':'')+'" data-grade="'+g+'">Grade '+g+'</button>';
