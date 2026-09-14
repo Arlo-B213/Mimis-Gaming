@@ -1,5 +1,58 @@
+<meta charset="UTF-8">
 <title>Glowstick Patrol</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Baloo+2:wght@400;500;600;800&display=swap">
+<script type="module">
+  // ---------------- CLOUD SAVE (Firebase — anonymous auth + Firestore) ----------------
+  // Progress still lives in localStorage first (instant, works offline); this layer
+  // syncs it to Firestore so it survives a cleared browser or follows to another device.
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js";
+  import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js";
+
+  var firebaseConfig = {
+    apiKey: "AIzaSyCs6_YRPZsGDkb4hUFU4uVvfwyN9gPKUDg",
+    authDomain: "soft-skills-f6ae0.firebaseapp.com",
+    projectId: "soft-skills-f6ae0",
+    storageBucket: "soft-skills-f6ae0.firebasestorage.app",
+    messagingSenderId: "25790648095",
+    appId: "1:25790648095:web:1576e69e12fe626d302a2a"
+  };
+
+  var app = initializeApp(firebaseConfig);
+  var auth = getAuth(app);
+  var db = getFirestore(app);
+  var uid = null;
+  var saveTimer = null;
+
+  var ready = new Promise(function(resolve){
+    onAuthStateChanged(auth, function(user){
+      if(user){ uid = user.uid; resolve(); }
+    });
+    signInAnonymously(auth).catch(function(err){
+      console.warn('Glowstick Patrol: cloud save unavailable (sign-in failed)', err);
+    });
+  });
+
+  window.CloudSave = {
+    ready: ready,
+    load: async function(){
+      await ready;
+      var snap = await getDoc(doc(db, 'saves', uid));
+      return snap.exists() ? snap.data().state : null;
+    },
+    save: function(stateObj){
+      // debounce so rapid in-game saves don't spam Firestore with writes
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(async function(){
+        try{
+          await ready;
+          await setDoc(doc(db, 'saves', uid), { state: stateObj, updatedAt: Date.now() });
+        }catch(err){ console.warn('Glowstick Patrol: cloud save failed', err); }
+      }, 800);
+    }
+  };
+</script>
 <style>
   :root{
     --ink:#150E2B;
@@ -390,7 +443,9 @@
     {id:'moon',    name:'Moonlit Hanbok', cost:100, hair:'#101033', outfit:'#8E7CFF', icon:'🌙'},
     {id:'encore',  name:'Encore Gold',    cost:150, hair:'#3B2A6B', outfit:'#FFD36E', icon:'🏆'},
     {id:'honor',   name:'Honor Roll Cape',cost:180, hair:'#B93B6B', outfit:'#52E8C6', icon:'📚'},
-    {id:'genius',  name:'Genius Galaxy Suit', cost:260, hair:'#101033', outfit:'#FF5FA2', icon:'🧠'}
+    {id:'genius',  name:'Genius Galaxy Suit', cost:260, hair:'#101033', outfit:'#FF5FA2', icon:'🧠'},
+    {id:'aurora',  name:'Aurora Veil',    cost:300, hair:'#154C40', outfit:'#7FE7FF', icon:'❄️'},
+    {id:'eclipse', name:'Eclipse Armor',  cost:340, hair:'#101033', outfit:'#4B2E83', icon:'🌑'}
   ];
 
   var WEAPONS = [
@@ -398,7 +453,9 @@
     {id:'comet',     name:'Comet Baton',        cost:60,  glow:'#52E8C6', type:'baton', desc:'+10% score in Zap Patrol.', bonus:{zapScore:0.10}},
     {id:'storm',     name:'Storm Rod',          cost:90,  glow:'#8E7CFF', type:'blade', desc:'Longer punch reach in Alley Brawl.', bonus:{punchRange:14}},
     {id:'solar',     name:'Solar Scepter',      cost:140, glow:'#FF5FA2', type:'blade', desc:'+18% score in Zap Patrol.', bonus:{zapScore:0.18}},
-    {id:'galaxy',    name:'Galaxy Wand',        cost:220, glow:'#FFD36E', type:'fan',   desc:'Longer reach and bonus Zap score.', bonus:{zapScore:0.12, punchRange:10}}
+    {id:'galaxy',    name:'Galaxy Wand',        cost:220, glow:'#FFD36E', type:'fan',   desc:'Longer reach and bonus Zap score.', bonus:{zapScore:0.12, punchRange:10}},
+    {id:'crescent',  name:'Crescent Fan',       cost:45,  glow:'#FF9EC4', type:'fan',   desc:'Featherlight and quick to open.', bonus:{punchRange:6}},
+    {id:'eclipse-blade', name:'Eclipse Twinblade', cost:300, glow:'#C77DFF', type:'blade', desc:'Twin blades cut from eclipse light.', bonus:{zapScore:0.20, punchRange:16}}
   ];
   function weaponById(id){
     for(var i=0;i<WEAPONS.length;i++){ if(WEAPONS[i].id===id) return WEAPONS[i]; }
@@ -435,7 +492,8 @@
     {id:'bow',           name:'Ribbon Bow',   cost:30},
     {id:'star-clip',     name:'Star Clip',    cost:25},
     {id:'flower-crown',  name:'Flower Crown', cost:45},
-    {id:'cat-ears',      name:'Cat Ears',     cost:40}
+    {id:'cat-ears',      name:'Cat Ears',     cost:40},
+    {id:'crescent-tiara',name:'Crescent Tiara', cost:65}
   ];
   function headwearById(id){
     for(var i=0;i<HEADWEAR.length;i++){ if(HEADWEAR[i].id===id) return HEADWEAR[i]; }
@@ -446,11 +504,25 @@
     {id:'none',     name:'No Accessory', cost:0},
     {id:'blush',    name:'Rosy Blush',   cost:15},
     {id:'glasses',  name:'Star Glasses', cost:30},
-    {id:'freckles', name:'Freckles',     cost:15}
+    {id:'freckles', name:'Freckles',     cost:15},
+    {id:'teardrop-gem', name:'Teardrop Gem', cost:35}
   ];
   function faceAccById(id){
     for(var i=0;i<FACE_ACC.length;i++){ if(FACE_ACC[i].id===id) return FACE_ACC[i]; }
     return FACE_ACC[0];
+  }
+
+  var MAKEUP = [
+    {id:'natural',  name:'Natural Glow',  cost:0,  lip:'#E0637E', shadow:null},
+    {id:'bold-red', name:'Bold Red',      cost:25, lip:'#D6294F', shadow:'#5C1F3A'},
+    {id:'coral',    name:'Coral Pop',     cost:20, lip:'#FF8B6B', shadow:'#FFC15E'},
+    {id:'plum',     name:'Plum Night',    cost:30, lip:'#8B4B8C', shadow:'#8E7CFF'},
+    {id:'clear',    name:'Clear Gloss',   cost:15, lip:'#F5B8C4', shadow:'#F5EFFF'},
+    {id:'smoky',    name:'Smoky Eye',     cost:35, lip:'#C25C7A', shadow:'#241A2E'}
+  ];
+  function makeupById(id){
+    for(var i=0;i<MAKEUP.length;i++){ if(MAKEUP[i].id===id) return MAKEUP[i]; }
+    return MAKEUP[0];
   }
 
   var HUNTERS = [
@@ -490,6 +562,13 @@
         "...",
         "Thank you for the light. Not everyone shares theirs.",
         "I counted 212 stars tonight. You were the 213th good thing."
+      ]},
+    {id:'sol', name:'Sol', color:'#FF7A4D', role:'Newest recruit — trips over his own cape',
+      lines:[
+        "I've been practicing my zap for a week straight. I only shocked myself twice today!",
+        "Hae says I'll grow into the cape. I've decided to just trip more gracefully instead.",
+        "Is it normal to be a little scared of Gloomlings? Asking for... okay, asking for me.",
+        "You're the reason I didn't quit patrol training. Thank you for that."
       ]}
   ];
 
@@ -843,6 +922,15 @@
         ctx.moveTo(cx+s*17, headCy-20); ctx.lineTo(cx+s*23, headCy-34); ctx.lineTo(cx+s*11, headCy-28);
         ctx.closePath(); ctx.fill();
       });
+    } else if(id==='crescent-tiara'){
+      ctx.strokeStyle = '#FFD36E'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, headCy-20, 20, Math.PI*1.12, Math.PI*1.88); ctx.stroke();
+      var tiaraGlow = ctx.createRadialGradient(cx, headCy-40, 0, cx, headCy-40, 6);
+      tiaraGlow.addColorStop(0, '#FFFFFF'); tiaraGlow.addColorStop(0.4, '#FFD36E'); tiaraGlow.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = tiaraGlow;
+      ctx.beginPath(); ctx.arc(cx, headCy-40, 6, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#FFD36E';
+      ctx.beginPath(); ctx.arc(cx, headCy-40, 2.4, 0, Math.PI*2); ctx.fill();
     }
   }
 
@@ -862,10 +950,21 @@
       [[-18,4],[-22,8],[18,4],[22,8],[0,10]].forEach(function(p){
         ctx.beginPath(); ctx.arc(cx+p[0], cy+p[1], 1.6, 0, Math.PI*2); ctx.fill();
       });
+    } else if(id==='teardrop-gem'){
+      var gemGlow = ctx.createRadialGradient(cx-17, cy+9, 0, cx-17, cy+9, 5);
+      gemGlow.addColorStop(0, '#FFFFFF'); gemGlow.addColorStop(0.45, '#7FE7FF'); gemGlow.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gemGlow;
+      ctx.beginPath(); ctx.arc(cx-17, cy+9, 5, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#7FE7FF';
+      ctx.beginPath();
+      ctx.moveTo(cx-17, cy+5); ctx.quadraticCurveTo(cx-14, cy+10, cx-17, cy+13); ctx.quadraticCurveTo(cx-20, cy+10, cx-17, cy+5);
+      ctx.closePath(); ctx.fill();
     }
   }
 
-  function renderPlayerVector(hairstyleId, hairColorHex, outfitColor, weaponGlow, headwearId, faceAccId, weaponType){
+  function renderPlayerVector(hairstyleId, hairColorHex, outfitColor, weaponGlow, headwearId, faceAccId, weaponType, lipColor, shadowColor){
+    lipColor = lipColor || '#E0637E';
+    shadowColor = shadowColor || weaponGlow;
     var canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 352;
     var ctx = canvas.getContext('2d');
@@ -1023,8 +1122,8 @@
       ctx.stroke();
     });
 
-    // eyeshadow wash — a wing of color above each eye, tinted by her weapon's energy
-    ctx.fillStyle = toRgba(weaponGlow, 0.32);
+    // eyeshadow wash — a wing of color above each eye, from her chosen makeup look
+    ctx.fillStyle = toRgba(shadowColor, 0.32);
     [-11, 11].forEach(function(dx, i){
       var dir = i===0 ? -1 : 1;
       ctx.beginPath();
@@ -1078,8 +1177,8 @@
       ctx.beginPath(); ctx.ellipse(cx+dx, headCy+3, 6, 3.5, 0, 0, Math.PI*2); ctx.fill();
     });
 
-    // smile — glossier lip tone
-    ctx.strokeStyle = '#E0637E'; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    // smile — colored by her chosen makeup look
+    ctx.strokeStyle = lipColor; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
     ctx.beginPath(); ctx.arc(cx, headCy+6, 6, 0.2*Math.PI, 0.8*Math.PI); ctx.stroke();
 
     // accessories (on top of everything)
@@ -1185,63 +1284,234 @@
     return canvas;
   }
 
+  function drawBoyHair(ctx, cx, headCy, color){
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.ellipse(cx, headCy-11, 27, 22, 0, 0, Math.PI*2); ctx.fill();
+    // a little tousled cowlick
+    ctx.beginPath();
+    ctx.moveTo(cx-4, headCy-30); ctx.quadraticCurveTo(cx+2, headCy-40, cx+9, headCy-32);
+    ctx.quadraticCurveTo(cx+2, headCy-33, cx-4, headCy-30);
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawLantern(ctx, handX, handY, glowColor){
+    // handle
+    ctx.strokeStyle = '#170F2E'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(handX+7, handY-30, 8, Math.PI*1.15, Math.PI*1.85); ctx.stroke();
+    // outer glow
+    var glow = ctx.createRadialGradient(handX+7, handY-16, 2, handX+7, handY-16, 24);
+    glow.addColorStop(0, toRgba(glowColor, 0.55));
+    glow.addColorStop(1, toRgba(glowColor, 0));
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(handX+7, handY-16, 24, 0, Math.PI*2); ctx.fill();
+    // lantern cage
+    ctx.fillStyle = '#170F2E';
+    roundRectPathGlobal(ctx, handX-6, handY-26, 26, 22, 5); ctx.fill();
+    // glowing bulb inside
+    var bulb = ctx.createRadialGradient(handX+7, handY-15, 0, handX+7, handY-15, 8);
+    bulb.addColorStop(0, '#FFFFFF'); bulb.addColorStop(0.5, glowColor); bulb.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = bulb;
+    ctx.beginPath(); ctx.arc(handX+7, handY-15, 8, 0, Math.PI*2); ctx.fill();
+    // cage bars
+    ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 1;
+    [handX+1, handX+7, handX+13].forEach(function(x){
+      ctx.beginPath(); ctx.moveTo(x, handY-25); ctx.lineTo(x, handY-5); ctx.stroke();
+    });
+    // base cap
+    ctx.fillStyle = '#170F2E';
+    ctx.beginPath(); ctx.ellipse(handX+7, handY-4, 8, 3, 0, 0, Math.PI*2); ctx.fill();
+  }
+
+  function roundRectPathGlobal(ctx, x, y, w, h, r){
+    if(ctx.roundRect){ ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y, x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x, y+h, r);
+    ctx.arcTo(x, y+h, x, y, r);
+    ctx.arcTo(x, y, x+w, y, r);
+    ctx.closePath();
+  }
+
   function renderLanternVector(boyColor){
     var canvas = document.createElement('canvas');
-    canvas.width = 112; canvas.height = 128;
+    canvas.width = 256; canvas.height = 352;
     var ctx = canvas.getContext('2d');
-    var cx = 56, cy = 66;
-    var shadow = toCss(darken(hexToInt(boyColor), 0.6));
+    ctx.scale(2, 2);
+    var cx = 64, headCy = 40, headR = 25;
+    var tunicColor = '#3A3160';
+    var tunicShadow = toCss(darken(hexToInt(tunicColor), 0.62));
+    var hairColor = '#241A38';
+    var shoeColor = '#170F2E';
 
-    ctx.strokeStyle = '#170F2E'; ctx.lineWidth = 3; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(cx, 6); ctx.lineTo(cx, 20); ctx.stroke();
+    // ground shadow + lantern-light glow pool
+    ctx.fillStyle = 'rgba(0,0,0,.28)';
+    ctx.beginPath(); ctx.ellipse(cx, 159, 22, 5, 0, 0, Math.PI*2); ctx.fill();
+    var circleGlow = ctx.createRadialGradient(cx, 156, 2, cx, 156, 32);
+    circleGlow.addColorStop(0, toRgba(boyColor, 0.38));
+    circleGlow.addColorStop(1, toRgba(boyColor, 0));
+    ctx.fillStyle = circleGlow;
+    ctx.beginPath(); ctx.ellipse(cx, 156, 32, 9, 0, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = toRgba(boyColor, 0.55); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.ellipse(cx, 156, 24, 6.5, 0, 0, Math.PI*2); ctx.stroke();
 
+    // short scout cloak, swept behind
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 5;
-    ctx.fillStyle = '#170F2E';
-    ctx.beginPath(); ctx.ellipse(cx, 22, 14, 7, 0, 0, Math.PI*2); ctx.fill();
-
-    var grad = ctx.createRadialGradient(cx-14, cy-20, 6, cx, cy, 48);
-    grad.addColorStop(0, '#FFFFFF'); grad.addColorStop(0.2, boyColor); grad.addColorStop(1, shadow);
-    ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.ellipse(cx, cy, 40, 46, 0, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = tunicShadow;
+    ctx.globalAlpha = 0.92;
+    ctx.beginPath();
+    ctx.moveTo(cx-19, 67);
+    ctx.quadraticCurveTo(cx-34, 90, cx-27, 124);
+    ctx.quadraticCurveTo(cx-15, 132, cx-4, 124);
+    ctx.quadraticCurveTo(cx-10, 92, cx-2, 68);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = toRgba(boyColor, 0.6); ctx.lineWidth = 1.3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx-27, 124); ctx.quadraticCurveTo(cx-15, 132, cx-4, 124); ctx.stroke();
     ctx.restore();
 
-    ctx.fillStyle = '#170F2E';
-    ctx.beginPath(); ctx.ellipse(cx, cy+46, 12, 6, 0, 0, Math.PI*2); ctx.fill();
+    // legs
+    ctx.fillStyle = tunicShadow;
+    roundRectPathGlobal(ctx, cx-16, 106, 13, 32, 6); ctx.fill();
+    roundRectPathGlobal(ctx, cx+3, 106, 13, 32, 6); ctx.fill();
 
-    ctx.strokeStyle = 'rgba(23,15,46,.28)'; ctx.lineWidth = 2;
-    [-22, 0, 22].forEach(function(dy){
+    // boots with a glowing cuff
+    ctx.fillStyle = shoeColor;
+    ctx.beginPath(); ctx.ellipse(cx-9, 152, 9, 6, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(cx+9, 152, 9, 6, 0, 0, Math.PI*2); ctx.fill();
+    roundRectPathGlobal(ctx, cx-16, 132, 13, 22, 4); ctx.fill();
+    roundRectPathGlobal(ctx, cx+3, 132, 13, 22, 4); ctx.fill();
+    ctx.strokeStyle = toRgba(boyColor, 0.7); ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(cx-16, 134); ctx.lineTo(cx-3, 134); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+3, 134); ctx.lineTo(cx+16, 134); ctx.stroke();
+
+    // torso — a patrol tunic with the boy's signature color as trim
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.3)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 5;
+    var bodyGrad = ctx.createLinearGradient(cx-23, 64, cx+23, 112);
+    bodyGrad.addColorStop(0, '#FFFFFF');
+    bodyGrad.addColorStop(0.16, tunicColor);
+    bodyGrad.addColorStop(1, tunicShadow);
+    ctx.fillStyle = bodyGrad;
+    roundRectPathGlobal(ctx, cx-23, 64, 46, 48, 16);
+    ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,0,.22)';
+    ctx.fillRect(cx-23, 104, 46, 6);
+    var buckleGlow = ctx.createRadialGradient(cx, 107, 0, cx, 107, 5);
+    buckleGlow.addColorStop(0, '#FFFFFF'); buckleGlow.addColorStop(0.4, boyColor); buckleGlow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = buckleGlow;
+    ctx.beginPath(); ctx.arc(cx, 107, 5, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = toRgba(boyColor, 0.75); ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx-19, 70); ctx.lineTo(cx-19, 102); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+19, 70); ctx.lineTo(cx+19, 102); ctx.stroke();
+    var chestGlow = ctx.createRadialGradient(cx, 74, 0, cx, 74, 7);
+    chestGlow.addColorStop(0, '#FFFFFF'); chestGlow.addColorStop(0.35, boyColor); chestGlow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = chestGlow;
+    ctx.beginPath(); ctx.arc(cx, 74, 7, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = boyColor;
+    ctx.save(); ctx.translate(cx, 74); ctx.rotate(Math.PI/4); ctx.fillRect(-3, -3, 6, 6); ctx.restore();
+
+    // his lantern, held out in front
+    drawLantern(ctx, cx+22, 96, boyColor);
+
+    // arms + hands
+    ctx.strokeStyle = tunicColor; ctx.lineWidth = 12; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx-22, 70); ctx.quadraticCurveTo(cx-36, 86, cx-28, 104); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx+22, 70); ctx.quadraticCurveTo(cx+34, 82, cx+29, 92); ctx.stroke();
+    ctx.fillStyle = '#FFDCC2';
+    ctx.beginPath(); ctx.arc(cx-28, 105, 6.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+29, 93, 6.5, 0, Math.PI*2); ctx.fill();
+
+    // pauldrons
+    [-1, 1].forEach(function(s){
+      var px = cx+s*22, py = 68;
+      var padGrad = ctx.createRadialGradient(px-s*2, py-2, 1, px, py, 8);
+      padGrad.addColorStop(0, '#FFFFFF'); padGrad.addColorStop(0.5, tunicColor); padGrad.addColorStop(1, tunicShadow);
+      ctx.fillStyle = padGrad;
+      ctx.beginPath(); ctx.ellipse(px, py, 7.5, 6, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = boyColor;
+      ctx.beginPath(); ctx.arc(px, py, 2, 0, Math.PI*2); ctx.fill();
+    });
+
+    // neck
+    ctx.fillStyle = '#F5D2B8';
+    ctx.beginPath(); ctx.ellipse(cx, 62, 8, 7, 0, 0, Math.PI*2); ctx.fill();
+
+    // hair (back layer)
+    drawBoyHair(ctx, cx, headCy, hairColor);
+
+    // head
+    var headGrad = ctx.createRadialGradient(cx-11, headCy-6, 4, cx, headCy, headR+4);
+    headGrad.addColorStop(0, '#FFF0E0'); headGrad.addColorStop(1, '#FFDCC2');
+    ctx.fillStyle = headGrad;
+    ctx.beginPath(); ctx.arc(cx, headCy, headR, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(200,130,110,.10)';
+    ctx.beginPath(); ctx.ellipse(cx+14, headCy+10, 9, 12, 0.3, 0, Math.PI*2); ctx.fill();
+
+    // eyebrows
+    ctx.strokeStyle = toCss(darken(hexToInt(hairColor), 0.7));
+    ctx.lineWidth = 2; ctx.lineCap = 'round';
+    [-11, 11].forEach(function(dx){
       ctx.beginPath();
-      ctx.moveTo(cx-38, cy+dy*0.6);
-      ctx.quadraticCurveTo(cx, cy+dy*0.6+6, cx+38, cy+dy*0.6);
+      ctx.moveTo(cx+dx-5, headCy-8); ctx.quadraticCurveTo(cx+dx, headCy-11, cx+dx+5, headCy-9);
       ctx.stroke();
     });
 
-    [-14, 14].forEach(function(dx){
-      ctx.fillStyle = '#FFFFFF';
-      ctx.beginPath(); ctx.ellipse(cx+dx, cy-6, 6, 7, 0, 0, Math.PI*2); ctx.fill();
+    // eyes — friendly, with an iris tinted by his lantern's glow
+    [-11, 11].forEach(function(dx){
+      ctx.fillStyle = boyColor;
+      ctx.beginPath(); ctx.arc(cx+dx, headCy, 4.1, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#241A2E';
-      ctx.beginPath(); ctx.arc(cx+dx, cy-4, 3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+dx, headCy, 3, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath(); ctx.arc(cx+dx-1.1, headCy-1.4, 1.15, 0, Math.PI*2); ctx.fill();
     });
-    ctx.strokeStyle = '#241A2E'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.arc(cx, cy+8, 10, 0.15*Math.PI, 0.85*Math.PI); ctx.stroke();
+
+    // soft baseline blush
+    ctx.fillStyle = 'rgba(255,150,170,.14)';
+    [-17, 17].forEach(function(dx){
+      ctx.beginPath(); ctx.ellipse(cx+dx, headCy+3, 6, 3.5, 0, 0, Math.PI*2); ctx.fill();
+    });
+
+    // easy grin
+    ctx.strokeStyle = '#C98A6B'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx, headCy+6, 6, 0.2*Math.PI, 0.8*Math.PI); ctx.stroke();
+
+    // ambient sparkles off his lantern
+    ctx.fillStyle = '#FFFFFF';
+    [[cx+36, 62, 2], [cx+14, 50, 1.3], [cx+40, 84, 1.5]].forEach(function(p){
+      ctx.save();
+      ctx.translate(p[0], p[1]);
+      ctx.globalAlpha = 0.85;
+      ctx.beginPath();
+      ctx.moveTo(0, -p[2]*2.4); ctx.lineTo(p[2]*0.7, -p[2]*0.4);
+      ctx.lineTo(p[2]*2.4, 0); ctx.lineTo(p[2]*0.7, p[2]*0.4);
+      ctx.lineTo(0, p[2]*2.4); ctx.lineTo(-p[2]*0.7, p[2]*0.4);
+      ctx.lineTo(-p[2]*2.4, 0); ctx.lineTo(-p[2]*0.7, -p[2]*0.4);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+    });
+    ctx.globalAlpha = 1;
 
     return canvas;
   }
 
   var spriteCache = {};
-  function getPlayerSprite(outfitId, weaponId, hairstyleId, hairColorId, headwearId, faceAccId){
+  function getPlayerSprite(outfitId, weaponId, hairstyleId, hairColorId, headwearId, faceAccId, makeupId){
     weaponId = weaponId || state.equippedWeapon;
     hairstyleId = hairstyleId || state.hairstyle;
     hairColorId = hairColorId || state.hairColor;
     headwearId = headwearId || state.headwear;
     faceAccId = faceAccId || state.faceAcc;
-    var key = 'player:'+outfitId+':'+weaponId+':'+hairstyleId+':'+hairColorId+':'+headwearId+':'+faceAccId;
+    makeupId = makeupId || state.makeup;
+    var key = 'player:'+outfitId+':'+weaponId+':'+hairstyleId+':'+hairColorId+':'+headwearId+':'+faceAccId+':'+makeupId;
     if(spriteCache[key]) return spriteCache[key];
     var o = outfitById(outfitId);
     var w = weaponById(weaponId);
     var hc = hairColorById(hairColorId);
-    var canvas = renderPlayerVector(hairstyleId, hc.hex, o.outfit, w.glow, headwearId, faceAccId, w.type);
+    var mk = makeupById(makeupId);
+    var canvas = renderPlayerVector(hairstyleId, hc.hex, o.outfit, w.glow, headwearId, faceAccId, w.type, mk.lip, mk.shadow);
     return (spriteCache[key] = canvas);
   }
   function getGloomlingSprite(colorHex){
@@ -1269,8 +1539,8 @@
     starPoints: 20,
     unlocked: ['starter'],
     equipped: 'starter',
-    affection: {hae:0, bit:0, nun:0},
-    best: {battle:0, rhythm:0, memory:0, brawl:0, catch:0, lantern:0, study:{math:0, grammar:0, reading:0}},
+    affection: {hae:0, bit:0, nun:0, sol:0},
+    best: {battle:0, rhythm:0, memory:0, brawl:0, catch:0, lantern:0, comet:0, study:{math:0, grammar:0, reading:0}},
     soundOn: true,
     grade: 3,
     unlockedWeapons: ['glowstick'],
@@ -1283,7 +1553,9 @@
     headwear: 'none',
     unlockedHeadwear: ['none'],
     faceAcc: 'none',
-    unlockedFaceAcc: ['none']
+    unlockedFaceAcc: ['none'],
+    makeup: 'natural',
+    unlockedMakeup: ['natural']
   };
 
   var state = loadState();
@@ -1321,11 +1593,18 @@
       merged.unlockedHeadwear = merged.unlockedHeadwear || ['none'];
       merged.faceAcc = merged.faceAcc || 'none';
       merged.unlockedFaceAcc = merged.unlockedFaceAcc || ['none'];
+      merged.makeup = merged.makeup || 'natural';
+      merged.unlockedMakeup = merged.unlockedMakeup || ['natural'];
+      merged.affection = merged.affection || {};
+      LANTERNBOYS.forEach(function(b){
+        if(typeof merged.affection[b.id] !== 'number') merged.affection[b.id] = 0;
+      });
       return merged;
     }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
   }
   function saveState(){
     try{ localStorage.setItem('glowstickPatrolSave', JSON.stringify(state)); }catch(e){}
+    if(window.CloudSave) window.CloudSave.save(state);
   }
 
   var XP_PER_LEVEL = 50;
@@ -1502,10 +1781,10 @@
     levelEl.textContent = 'Lv.' + levelForXp(state.totalEarned);
   }
 
-  function avatarHTML(outfitId, sizeVar, badgeIcon, weaponId, hairstyleId, headwearId, faceAccId){
+  function avatarHTML(outfitId, sizeVar, badgeIcon, weaponId, hairstyleId, headwearId, faceAccId, makeupId){
     var o = outfitById(outfitId);
     var style = '--av:' + (sizeVar||'120px') + ';';
-    var src = getPlayerSprite(outfitId, weaponId, hairstyleId, null, headwearId, faceAccId).toDataURL();
+    var src = getPlayerSprite(outfitId, weaponId, hairstyleId, null, headwearId, faceAccId, makeupId).toDataURL();
     return (
       '<div class="avatar" style="'+style+'">' +
         '<img class="sprite-img" src="'+src+'" alt="'+o.name+'">' +
@@ -1630,7 +1909,7 @@
   }
   function totalAffectionPct(){
     var sum=0; for(var k in state.affection){ sum += state.affection[k]; }
-    return Math.round(sum/(3*100)*100);
+    return Math.round(sum/(LANTERNBOYS.length*100)*100);
   }
 
   // ---------------- CLUBHOUSE ----------------
@@ -1693,7 +1972,8 @@
     hairstyle: {list:HAIRSTYLES, unlockedKey:'unlockedHairstyles', equippedKey:'hairstyle'},
     haircolor: {list:HAIR_COLORS, unlockedKey:'unlockedHairColors', equippedKey:'hairColor'},
     headwear:  {list:HEADWEAR,    unlockedKey:'unlockedHeadwear',  equippedKey:'headwear'},
-    faceacc:   {list:FACE_ACC,    unlockedKey:'unlockedFaceAcc',   equippedKey:'faceAcc'}
+    faceacc:   {list:FACE_ACC,    unlockedKey:'unlockedFaceAcc',   equippedKey:'faceAcc'},
+    makeup:    {list:MAKEUP,      unlockedKey:'unlockedMakeup',    equippedKey:'makeup'}
   };
 
   function renderStyle(){
@@ -1750,6 +2030,18 @@
         avatarHTML(state.equipped,'54px',false,null,null,null,fa.id).replace('class="avatar"','class="avatar mini-av"') +
         '<div class="name">'+fa.name+'</div>' +
         '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wear') : '⭐ '+fa.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div>';
+
+    html += '<div class="eyebrow style-heading">Makeup</div><div class="swatch-grid">';
+    MAKEUP.forEach(function(mk){
+      var unlocked = state.unlockedMakeup.indexOf(mk.id)!==-1;
+      var equipped = state.makeup===mk.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-cat="makeup" data-id="'+mk.id+'" tabindex="0">' +
+        avatarHTML(state.equipped,'54px',false,null,null,null,null,mk.id).replace('class="avatar"','class="avatar mini-av"') +
+        '<div class="name">'+mk.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wear') : '⭐ '+mk.cost)+'</div>' +
       '</div>';
     });
     html += '</div>';
@@ -1820,7 +2112,8 @@
     });
   }
 
-  var loungeLineIndex = {hae:0,bit:0,nun:0};
+  var loungeLineIndex = {};
+  LANTERNBOYS.forEach(function(b){ loungeLineIndex[b.id] = 0; });
   function renderLounge(){
     var body = document.getElementById('clubBody');
     body.innerHTML = '<div class="boy-list"></div>';
@@ -1841,30 +2134,100 @@
     });
   }
 
-  function openDialogue(boyId){
+  var GIFTS = [
+    {id:'noodles', name:'Noodle Cup',  icon:'🍜', cost:10, affection:8},
+    {id:'comic',   name:'Comic Book',  icon:'📖', cost:20, affection:14},
+    {id:'firefly', name:'Firefly Jar', icon:'✨', cost:40, affection:22}
+  ];
+  var AFFECTION_MILESTONES = [25, 50, 75, 100];
+
+  function checkAffectionMilestone(boyId, before, after){
+    var b = boyById(boyId);
+    AFFECTION_MILESTONES.forEach(function(m){
+      if(before < m && after >= m){
+        var bonus = m===100 ? 15 : 5;
+        earnPoints(bonus);
+        saveState(); refreshTopbar();
+        showToast((m===100 ? '💖 Best Friends with ' : '⭐ Friendship Lv.'+(AFFECTION_MILESTONES.indexOf(m)+1)+' — ') + b.name + '! +'+bonus+' Star Points');
+        beep(880,.15,'triangle');
+      }
+    });
+  }
+
+  function openDialogue(boyId, showGifts){
     var b = boyById(boyId);
     var body = document.getElementById('clubBody');
     var line = b.lines[loungeLineIndex[boyId] % b.lines.length];
+    var giftRow = !showGifts ? '' :
+      '<div class="swatch-grid" style="width:100%;">' +
+        GIFTS.map(function(g){
+          var afford = state.starPoints >= g.cost;
+          return '<div class="swatch '+(afford?'':'locked')+'" data-gift="'+g.id+'" tabindex="0">' +
+            '<div style="font-size:26px;line-height:1;">'+g.icon+'</div>' +
+            '<div class="name">'+g.name+'</div>' +
+            '<div class="cost">⭐ '+g.cost+'</div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
     body.innerHTML =
       '<div class="dialogue-card">' +
         '<div class="lantern-av" style="--bcolor:'+b.color+';width:76px;height:76px;"><img class="lantern-sprite" src="'+getLanternSprite(boyId).toDataURL()+'" alt="'+b.name+'"></div>' +
         '<div><b>'+b.name+'</b><div class="role" style="color:var(--dim);font-size:12px;">'+b.role+'</div></div>' +
         '<div class="dialogue-bubble" id="dlgLine">"'+line+'"</div>' +
         '<div class="affection-bar" style="width:100%;"><div class="affection-fill" id="dlgFill" style="width:'+state.affection[boyId]+'%"></div></div>' +
+        giftRow +
         '<div style="display:flex; gap:8px; width:100%;">' +
           '<button class="btn btn-ghost" id="dlgBack" style="flex:1;">Back</button>' +
+          '<button class="btn btn-ghost" id="dlgChat" style="flex:1;">💬 Chat</button>' +
+          '<button class="btn btn-ghost" id="dlgGift" style="flex:1;">🎁 Gift</button>' +
           '<button class="btn btn-primary" id="dlgFive" style="flex:2;">✋ High Five</button>' +
         '</div>' +
       '</div>';
+
     document.getElementById('dlgBack').addEventListener('click', function(){ renderLounge(); });
+
+    document.getElementById('dlgChat').addEventListener('click', function(){
+      loungeLineIndex[boyId] = (loungeLineIndex[boyId]+1) % b.lines.length;
+      document.getElementById('dlgLine').textContent = '"' + b.lines[loungeLineIndex[boyId]] + '"';
+      beep(520,.08,'sine');
+    });
+
+    document.getElementById('dlgGift').addEventListener('click', function(){
+      openDialogue(boyId, !showGifts);
+    });
+
+    if(showGifts){
+      Array.prototype.forEach.call(body.querySelectorAll('[data-gift]'), function(el){
+        el.addEventListener('click', function(){
+          var g = null;
+          for(var i=0;i<GIFTS.length;i++){ if(GIFTS[i].id===el.dataset.gift){ g = GIFTS[i]; break; } }
+          if(state.starPoints < g.cost){
+            showToast('Need ' + (g.cost - state.starPoints) + ' more Star Points');
+            beep(160,.12,'square');
+            return;
+          }
+          state.starPoints -= g.cost;
+          var before = state.affection[boyId];
+          state.affection[boyId] = Math.min(100, before + g.affection);
+          saveState(); refreshTopbar();
+          checkAffectionMilestone(boyId, before, state.affection[boyId]);
+          showToast(b.name + ' loves the ' + g.name + '!');
+          playFanfare();
+          openDialogue(boyId, false);
+        });
+      });
+    }
+
     document.getElementById('dlgFive').addEventListener('click', function(){
       loungeLineIndex[boyId] = (loungeLineIndex[boyId]+1) % b.lines.length;
       document.getElementById('dlgLine').textContent = '"' + b.lines[loungeLineIndex[boyId]] + '"';
       beep(660,.12,'sine');
       if(state.affection[boyId] < 100){
-        state.affection[boyId] = Math.min(100, state.affection[boyId] + 4 + Math.floor(Math.random()*5));
+        var before = state.affection[boyId];
+        state.affection[boyId] = Math.min(100, before + 4 + Math.floor(Math.random()*5));
         earnPoints(2);
         saveState(); refreshTopbar();
+        checkAffectionMilestone(boyId, before, state.affection[boyId]);
         document.getElementById('dlgFill').style.width = state.affection[boyId] + '%';
         showToast('+2 Star Points');
       }
@@ -2450,6 +2813,7 @@
         '<div class="card arcade-card" data-game="memory"><div class="ico">🍡</div><h3>Memory Match</h3><p>Find every matching pair.</p><div class="best">Best '+(state.best.memory||'—')+'</div></div>' +
         '<div class="card arcade-card" data-game="catch"><div class="ico">⭐</div><h3>Star Catch</h3><p>Move to catch stars, dodge Gloomlings.</p><div class="best">Best '+state.best.catch+'</div></div>' +
         '<div class="card arcade-card" data-game="lantern"><div class="ico">🏮</div><h3>Lantern Says</h3><p>Watch the pattern, repeat it back.</p><div class="best">Best '+state.best.lantern+'</div></div>' +
+        '<div class="card arcade-card" data-game="comet"><div class="ico">☄️</div><h3>Comet Dash</h3><p>Switch lanes, dodge Gloomlings, chain glowsticks.</p><div class="best">Best '+state.best.comet+'</div></div>' +
       '</div>';
     Array.prototype.forEach.call(stageEl.querySelectorAll('[data-game]'), function(el){
       el.addEventListener('click', function(){
@@ -2457,6 +2821,7 @@
         if(g==='rhythm') renderRhythmIntro();
         else if(g==='memory') renderMemoryIntro();
         else if(g==='catch') renderCatchIntro();
+        else if(g==='comet') renderCometIntro();
         else renderLanternIntro();
       });
     });
@@ -2979,6 +3344,204 @@
     activeCleanup = function(){ ended = true; };
   }
 
+  // ---------------- COMET DASH (3-lane endless dodge/collect runner) ----------------
+  function renderCometIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Comet Dash</div>' +
+        '<h2 style="margin:4px 0;">Switch lanes, keep the streak alive</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Swipe or use ◀ ▶ to change lanes. Grab glowsticks for combo points and dodge the Gloomlings — three hits and the patrol\'s over. It only gets faster from here.</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.comet+'</b></div>' +
+        '<button class="btn btn-primary" id="startComet" style="margin-top:12px; width:100%;">Start Dash</button>' +
+        '<button class="btn btn-ghost" id="backArcadeComet" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startComet').addEventListener('click', runCometDash);
+    document.getElementById('backArcadeComet').addEventListener('click', renderArcadeHub);
+  }
+
+  function runCometDash(){
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span>Score <b class="tabular" id="cdScore">0</b></span><span id="cdLives">❤️❤️❤️</span></div>' +
+      '<div class="battle-wrap"><canvas id="cometCanvas" width="360" height="480"></canvas></div>' +
+      '<div class="brawl-controls">' +
+        '<div class="brawl-btn" id="cdLeft">◀</div>' +
+        '<div class="brawl-btn" id="cdRight">▶</div>' +
+      '</div>';
+    var canvas = document.getElementById('cometCanvas');
+    var ctx = canvas.getContext('2d');
+    var scoreEl = document.getElementById('cdScore');
+    var livesEl = document.getElementById('cdLives');
+    var W = canvas.width, H = canvas.height;
+    var LANES = [W*0.22, W*0.5, W*0.78];
+    var PLAYER_Y = H - 74;
+
+    var running = true, rafId = null;
+    var startTs = null, lastSpawn = 0, flashTimer = 0;
+    var lane = 1, playerX = LANES[1];
+    var score = 0, combo = 0, lives = 3;
+    var items = [], particles = [];
+    var stars = makeStarfield(28, W, H);
+    var demonColors = ['#52E8C6','#8E7CFF','#FF8B5E','#FFD36E'];
+
+    function spawnItem(elapsedSec){
+      var speed = 2.4 + Math.min(3.2, elapsedSec*0.06);
+      var isGlow = Math.random() < 0.62;
+      items.push({
+        lane: Math.floor(Math.random()*3),
+        y: -24,
+        r: isGlow ? 11 : 20,
+        type: isGlow ? 'glow' : 'gloomling',
+        hue: Math.floor(Math.random()*360),
+        color: demonColors[Math.floor(Math.random()*demonColors.length)],
+        speed: speed
+      });
+    }
+    function spawnParticles(x,y,color){
+      for(var i=0;i<10;i++){
+        var ang = Math.random()*Math.PI*2;
+        particles.push({x:x,y:y,vx:Math.cos(ang)*3,vy:Math.sin(ang)*3,life:20,color:color});
+      }
+    }
+    function drawPlayer(){
+      var sprite = getPlayerSprite(state.equipped, state.equippedWeapon);
+      var w=54, h=74;
+      ctx.save();
+      if(flashTimer>0 && Math.floor(flashTimer/3)%2===0) ctx.globalAlpha = 0.35;
+      ctx.drawImage(sprite, playerX-w/2, PLAYER_Y-h+10, w, h);
+      ctx.restore();
+    }
+
+    function frame(ts){
+      if(!running) return;
+      if(startTs===null) startTs = ts;
+      var elapsedSec = (ts-startTs)/1000;
+
+      ctx.fillStyle = flashTimer>0 ? 'rgba(255,95,162,.12)' : '#0F0A22';
+      ctx.fillRect(0,0,W,H);
+      drawStarfield(ctx, stars, ts);
+      if(flashTimer>0) flashTimer--;
+
+      // lane dividers
+      ctx.strokeStyle = 'rgba(245,239,255,.08)'; ctx.lineWidth = 2;
+      [0.36, 0.64].forEach(function(f){
+        ctx.beginPath(); ctx.moveTo(W*f, 0); ctx.lineTo(W*f, H); ctx.stroke();
+      });
+
+      // ease player toward target lane
+      var targetX = LANES[lane];
+      playerX += (targetX - playerX) * 0.28;
+
+      var spawnGap = Math.max(340, 780 - elapsedSec*14);
+      if(ts - lastSpawn > spawnGap){ spawnItem(elapsedSec); lastSpawn = ts; }
+
+      for(var i=items.length-1;i>=0;i--){
+        var it = items[i];
+        it.y += it.speed;
+        var ix = LANES[it.lane];
+        if(it.type==='glow'){
+          var glowGrad = ctx.createRadialGradient(ix, it.y, 0, ix, it.y, it.r*1.8);
+          glowGrad.addColorStop(0, 'hsla('+it.hue+',100%,70%,.55)');
+          glowGrad.addColorStop(1, 'hsla('+it.hue+',100%,70%,0)');
+          ctx.fillStyle = glowGrad;
+          ctx.beginPath(); ctx.arc(ix, it.y, it.r*1.8, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle = 'hsl('+it.hue+',100%,65%)';
+          ctx.beginPath(); ctx.arc(ix, it.y, it.r, 0, Math.PI*2); ctx.fill();
+        } else {
+          ctx.drawImage(getGloomlingSprite(it.color), ix-it.r, it.y-it.r, it.r*2, it.r*2);
+        }
+
+        var hit = it.lane===lane && Math.abs(it.y-(PLAYER_Y-20)) < 30;
+        if(hit){
+          if(it.type==='glow'){
+            combo++; score += 2 + Math.floor(combo/5);
+            spawnParticles(ix, it.y, 'hsl('+it.hue+',100%,65%)');
+            beep(620+combo*8, .08, 'triangle');
+          } else {
+            combo = 0; lives--; flashTimer = 16;
+            livesEl.textContent = '❤️'.repeat(Math.max(0,lives)) + '🖤'.repeat(3-Math.max(0,lives));
+            spawnParticles(ix, it.y, '#8E7CFF');
+            beep(160,.18,'sawtooth');
+            if(lives<=0){ items.splice(i,1); endComet(); return; }
+          }
+          scoreEl.textContent = score;
+          items.splice(i,1);
+          continue;
+        }
+        if(it.y - it.r > H) items.splice(i,1);
+      }
+
+      // trickle score for distance survived
+      score += 0.02 + elapsedSec*0.0008;
+      scoreEl.textContent = Math.floor(score);
+
+      drawPlayer();
+      for(var p=particles.length-1;p>=0;p--){
+        var pt = particles[p];
+        pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.12; pt.life--;
+        ctx.globalAlpha = Math.max(0,pt.life/20);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,3,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+        if(pt.life<=0) particles.splice(p,1);
+      }
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function moveLane(dir){
+      lane = Math.max(0, Math.min(2, lane+dir));
+      beep(500, .04, 'square');
+    }
+    function onKeyDown(e){
+      var k = e.key.toLowerCase();
+      if(k==='arrowleft'||k==='a') moveLane(-1);
+      if(k==='arrowright'||k==='d') moveLane(1);
+    }
+    window.addEventListener('keydown', onKeyDown);
+
+    document.getElementById('cdLeft').addEventListener('pointerdown', function(ev){ ev.preventDefault(); moveLane(-1); });
+    document.getElementById('cdRight').addEventListener('pointerdown', function(ev){ ev.preventDefault(); moveLane(1); });
+
+    // swipe left/right on the canvas itself
+    var touchStartX = null;
+    canvas.addEventListener('pointerdown', function(ev){ touchStartX = ev.clientX; });
+    canvas.addEventListener('pointerup', function(ev){
+      if(touchStartX===null) return;
+      var dx = ev.clientX - touchStartX;
+      if(Math.abs(dx) > 30) moveLane(dx > 0 ? 1 : -1);
+      touchStartX = null;
+    });
+
+    rafId = requestAnimationFrame(frame);
+
+    function endComet(){
+      running = false;
+      if(rafId) cancelAnimationFrame(rafId);
+      var finalScore = Math.floor(score);
+      var earned = Math.max(5, Math.round(finalScore/3));
+      earnPoints(earned);
+      if(finalScore > state.best.comet) state.best.comet = finalScore;
+      saveState(); refreshTopbar();
+      playFanfare();
+      var wrap = stageEl.querySelector('.battle-wrap');
+      wrap.insertAdjacentHTML('beforeend',
+        '<div class="overlay-center">' +
+          '<h2 style="margin:0;">Patrol\'s Over!</h2>' +
+          '<p style="color:var(--dim); margin:0;">Score <b class="tabular" style="color:var(--cream);">'+finalScore+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
+          '<button class="btn btn-primary" id="cometAgain">Dash Again</button>' +
+          '<button class="btn btn-ghost" id="cometDone">Back to Mini-Games</button>' +
+        '</div>'
+      );
+      document.getElementById('cometAgain').addEventListener('click', runCometDash);
+      document.getElementById('cometDone').addEventListener('click', renderArcadeHub);
+    }
+
+    activeCleanup = function(){
+      running = false;
+      if(rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }
+
   // ---------------- STUDY HALL ----------------
   var QUIZ_ROUND_LENGTH = {math:8, grammar:5, reading:3};
   function subjectLabel(subject){
@@ -3096,5 +3659,21 @@
   }
 
   setScreen(state.hunter ? 'home' : 'select-hunter');
+
+  // pull any cloud save once sign-in resolves, and adopt it if it's at least as progressed
+  // as what's on this device (covers a cleared browser or a different device/browser)
+  if(window.CloudSave){
+    window.CloudSave.load().then(function(cloudState){
+      if(!cloudState) return;
+      if((cloudState.totalEarned||0) < (state.totalEarned||0)) return;
+      var merged = JSON.parse(JSON.stringify(DEFAULT_STATE));
+      for(var k in cloudState){ merged[k] = cloudState[k]; }
+      state = merged;
+      try{ localStorage.setItem('glowstickPatrolSave', JSON.stringify(state)); }catch(e){}
+      refreshTopbar();
+      setScreen(state.hunter ? 'home' : 'select-hunter');
+      showToast('Cloud save loaded ☁️');
+    }).catch(function(){ /* offline, blocked, or sign-in not enabled — keep local save */ });
+  }
 })();
 </script>
