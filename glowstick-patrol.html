@@ -526,15 +526,33 @@
   }
 
   var HUNTERS = [
-    {id:'rae', name:'Rae', title:'The Vanguard',
+    {id:'rae', name:'Rae', title:'The Vanguard', role:'Vanguard — first through the fog',
       tagline:'First through the fog, glowstick blazing. She hits fast and loud.',
-      hairstyle:'ponytail', hairColor:'rose', outfit:'stage', weapon:'solar'},
-    {id:'suna', name:'Suna', title:'The Seer',
+      hairstyle:'ponytail', hairColor:'rose', outfit:'stage', weapon:'solar',
+      lines:[
+        "Patrol was quiet tonight. I almost missed the noise.",
+        "I don't warm up. I just start hitting things and my body catches up.",
+        "Bit asked me to teach him a punch. I taught him three. He's icing his hand.",
+        "You held your own out there tonight. That's not luck — that's you."
+      ]},
+    {id:'suna', name:'Suna', title:'The Seer', role:'Seer — reads the shadows first',
       tagline:'Reads the shadows before they move. Calm hands, sharper aim.',
-      hairstyle:'undercut', hairColor:'mint', outfit:'beat', weapon:'comet'},
-    {id:'yumi', name:'Yumi', title:'The Firecracker',
+      hairstyle:'undercut', hairColor:'mint', outfit:'beat', weapon:'comet',
+      lines:[
+        "The fog moved strange tonight. I don't think it noticed I noticed.",
+        "I counted your steps before you took them. Old habit. Don't mind me.",
+        "Rae hits first and asks questions never. I ask first. We balance out.",
+        "You're getting quieter on your feet. That's the highest compliment I give."
+      ]},
+    {id:'yumi', name:'Yumi', title:'The Firecracker', role:'Firecracker — loudest glow in the fight',
       tagline:'Loudest laugh in the alley, loudest glow in the fight.',
-      hairstyle:'buns', hairColor:'gold', outfit:'lantern', weapon:'galaxy'}
+      hairstyle:'buns', hairColor:'gold', outfit:'lantern', weapon:'galaxy',
+      lines:[
+        "I named my wand. It's Gerald. Don't ask, Gerald doesn't like it.",
+        "Zapped four Gloomlings in a row tonight. FOUR. I'm framing that number.",
+        "Suna says I'm 'a lot.' I choose to hear that as a compliment.",
+        "You laughed at my joke tonight. Real laugh, not the polite one. Big win."
+      ]}
   ];
   function hunterById(id){
     for(var i=0;i<HUNTERS.length;i++){ if(HUNTERS[i].id===id) return HUNTERS[i]; }
@@ -1536,10 +1554,11 @@
 
   var DEFAULT_STATE = {
     hunter: null,
+    squad: 'hunters',
     starPoints: 20,
     unlocked: ['starter'],
     equipped: 'starter',
-    affection: {hae:0, bit:0, nun:0, sol:0},
+    affection: {hae:0, bit:0, nun:0, sol:0, rae:0, suna:0, yumi:0},
     best: {battle:0, rhythm:0, memory:0, brawl:0, catch:0, lantern:0, comet:0, study:{math:0, grammar:0, reading:0}},
     soundOn: true,
     grade: 3,
@@ -1596,9 +1615,10 @@
       merged.makeup = merged.makeup || 'natural';
       merged.unlockedMakeup = merged.unlockedMakeup || ['natural'];
       merged.affection = merged.affection || {};
-      LANTERNBOYS.forEach(function(b){
-        if(typeof merged.affection[b.id] !== 'number') merged.affection[b.id] = 0;
+      LANTERNBOYS.concat(HUNTERS).forEach(function(m){
+        if(typeof merged.affection[m.id] !== 'number') merged.affection[m.id] = 0;
       });
+      merged.squad = merged.squad || 'hunters';
       return merged;
     }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
   }
@@ -1628,6 +1648,33 @@
   function boyById(id){
     for(var i=0;i<LANTERNBOYS.length;i++){ if(LANTERNBOYS[i].id===id) return LANTERNBOYS[i]; }
     return LANTERNBOYS[0];
+  }
+
+  // ---------------- SQUAD (playable Hunters vs playable Lanternboys) ----------------
+  // Whichever squad you play, the other cast lives in the Lounge instead.
+  function loungeCastFor(squad){ return squad==='boys' ? HUNTERS : LANTERNBOYS; }
+  function playableCastFor(squad){ return squad==='boys' ? LANTERNBOYS : HUNTERS; }
+  function isHunter(member){ return member && member.hasOwnProperty('outfit'); }
+
+  function npcById(id){
+    return hunterById(id) || boyById(id);
+  }
+
+  function castMemberColor(member){
+    return isHunter(member) ? outfitById(member.outfit).outfit : member.color;
+  }
+  function castMemberSubtitle(member){
+    return isHunter(member) ? member.title : member.role;
+  }
+  function castMemberSpriteCanvas(member){
+    return isHunter(member) ?
+      getPlayerSprite(member.outfit, member.weapon, member.hairstyle, member.hairColor, 'none', 'none', 'natural') :
+      getLanternSprite(member.id);
+  }
+  function playableSprite(){
+    var squad = state.squad || 'hunters';
+    if(squad==='boys' && state.hunter) return getLanternSprite(state.hunter);
+    return getPlayerSprite(state.equipped, state.equippedWeapon);
   }
 
   var stageEl = document.getElementById('stage');
@@ -1801,7 +1848,7 @@
       buttons[i].classList.toggle('active', buttons[i].dataset.screen === name);
     }
     if(name==='home') renderHome();
-    else if(name==='select-hunter') renderHunterSelect();
+    else if(name==='select-hunter') renderSquadSelect();
     else if(name==='clubhouse') renderClubhouse('closet');
     else if(name==='battle') renderBattleHub();
     else if(name==='arcade') renderArcadeHub();
@@ -1830,32 +1877,70 @@
     );
   }
 
-  function renderHunterSelect(){
+  function renderSquadSelect(){
     var html =
-      '<div class="eyebrow">Choose Your Hunter</div>' +
-      '<h2 style="margin:2px 0 4px;">Who lights up the alley tonight?</h2>' +
-      '<p style="color:var(--dim); font-size:13px; margin:0 0 12px;">Pick your hunter to start. You can still change her outfit, hair and weapon anytime in the Clubhouse.</p>';
-    HUNTERS.forEach(function(h){
-      var hc = hairColorById(h.hairColor);
-      var o = outfitById(h.outfit);
-      var w = weaponById(h.weapon);
-      var canvas = renderPlayerVector(h.hairstyle, hc.hex, o.outfit, w.glow, 'none', 'none', w.type);
-      html +=
-        '<div class="card" data-hunter="'+h.id+'" style="display:flex; gap:14px; align-items:center; text-align:left; margin-bottom:10px; cursor:pointer;">' +
-          '<img class="sprite-img" style="width:64px;height:88px;flex:none;" src="'+canvas.toDataURL()+'" alt="'+h.name+'">' +
-          '<div>' +
-            '<h3 style="margin:0 0 2px;">'+h.name+' <span style="color:var(--amber); font-size:11px; font-weight:800;">'+h.title+'</span></h3>' +
-            '<p style="margin:0; color:var(--dim); font-size:12.5px;">'+h.tagline+'</p>' +
-          '</div>' +
-        '</div>';
-    });
+      '<div class="eyebrow">Choose Your Squad</div>' +
+      '<h2 style="margin:2px 0 4px;">Who runs the patrol?</h2>' +
+      '<p style="color:var(--dim); font-size:13px; margin:0 0 12px;">Pick your playable squad — whichever you choose, the other crew hangs out in the Lounge instead.</p>' +
+      '<div class="card" data-squad="hunters" style="text-align:center; margin-bottom:12px; cursor:pointer;">' +
+        '<div class="eyebrow" style="color:var(--pink);">Play as</div>' +
+        '<h3 style="margin:4px 0;">🌙 The Hunters</h3>' +
+        '<p style="margin:0; color:var(--dim); font-size:12.5px;">Rae, Suna &amp; Yumi — glowstick-wielding demon hunters.</p>' +
+      '</div>' +
+      '<div class="card" data-squad="boys" style="text-align:center; cursor:pointer;">' +
+        '<div class="eyebrow" style="color:var(--teal);">Play as</div>' +
+        '<h3 style="margin:4px 0;">🏮 The Lanternboys</h3>' +
+        '<p style="margin:0; color:var(--dim); font-size:12.5px;">Hae, Bit, Nun &amp; Sol — the alley\'s lantern-lit patrol.</p>' +
+      '</div>';
     stageEl.innerHTML = html;
-    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-hunter]'), function(el){
-      el.addEventListener('click', function(){ chooseHunter(el.dataset.hunter); });
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-squad]'), function(el){
+      el.addEventListener('click', function(){
+        state.squad = el.dataset.squad;
+        renderHunterSelect();
+      });
     });
   }
 
-  function chooseHunter(id){
+  function renderHunterSelect(){
+    var cast = playableCastFor(state.squad);
+    var isBoys = state.squad==='boys';
+    var html =
+      '<div class="eyebrow">Choose Your '+(isBoys?'Lanternboy':'Hunter')+'</div>' +
+      '<h2 style="margin:2px 0 4px;">Who lights up the alley tonight?</h2>' +
+      '<p style="color:var(--dim); font-size:13px; margin:0 0 12px;">' +
+        (isBoys ? 'Pick who you\'ll play. The Hunters will be waiting for you in the Lounge.' :
+          'Pick your hunter to start. You can still change her outfit, hair and weapon anytime in the Clubhouse.') +
+      '</p>';
+    cast.forEach(function(m){
+      var canvas = castMemberSpriteCanvas(m);
+      html +=
+        '<div class="card" data-playable="'+m.id+'" style="display:flex; gap:14px; align-items:center; text-align:left; margin-bottom:10px; cursor:pointer;">' +
+          '<img class="sprite-img" style="width:64px;height:88px;flex:none;" src="'+canvas.toDataURL()+'" alt="'+m.name+'">' +
+          '<div>' +
+            '<h3 style="margin:0 0 2px;">'+m.name+' <span style="color:var(--amber); font-size:11px; font-weight:800;">'+castMemberSubtitle(m)+'</span></h3>' +
+            '<p style="margin:0; color:var(--dim); font-size:12.5px;">'+(m.tagline||m.lines[0])+'</p>' +
+          '</div>' +
+        '</div>';
+    });
+    html += '<button class="btn btn-ghost" id="backSquad" style="width:100%; margin-top:4px;">Back to Squad Select</button>';
+    stageEl.innerHTML = html;
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-playable]'), function(el){
+      el.addEventListener('click', function(){ choosePlayable(el.dataset.playable); });
+    });
+    document.getElementById('backSquad').addEventListener('click', renderSquadSelect);
+  }
+
+  function choosePlayable(id){
+    if(state.squad==='boys'){
+      var boy = boyById(id);
+      if(!boy) return;
+      state.hunter = id;
+      saveState();
+      showToast('You are ' + boy.name + '!');
+      beep(880,.15,'triangle');
+      setScreen('home');
+      return;
+    }
     var h = hunterById(id);
     if(!h) return;
     state.hunter = id;
@@ -1873,16 +1958,24 @@
     setScreen('home');
   }
 
+  function heroAvatarHTML(sizeVar){
+    if(state.squad==='boys'){
+      var style = '--av:' + (sizeVar||'120px') + ';';
+      return '<div class="avatar" style="'+style+'"><img class="sprite-img" src="'+playableSprite().toDataURL()+'" alt="hero"></div>';
+    }
+    return avatarHTML(state.equipped, sizeVar);
+  }
+
   function renderHome(){
     var dayIndex = new Date().getDate() % FORECASTS.length;
-    var hunter = state.hunter ? hunterById(state.hunter) : null;
-    var welcomeName = hunter ? hunter.name : 'hunter';
-    var welcomeSub = hunter ?
-      ('Weapon charged, ' + hunter.title.toLowerCase() + '. The Lanternboys already saved you a seat.') :
-      'Your lightstick is charged and the Lanternboys already saved you a seat.';
+    var playable = state.hunter ? npcById(state.hunter) : null;
+    var welcomeName = playable ? playable.name : 'hunter';
+    var welcomeSub = playable ?
+      ('Weapon charged, ' + castMemberSubtitle(playable).toLowerCase() + '. The lounge crew already saved you a seat.') :
+      'Your lightstick is charged and the lounge crew already saved you a seat.';
     stageEl.innerHTML =
       '<div class="hero">' +
-        avatarHTML(state.equipped, '92px') +
+        heroAvatarHTML('92px') +
         '<div><h1>Welcome back, '+welcomeName+'.</h1><p>'+welcomeSub+'</p></div>' +
       '</div>' +
       '<div class="forecast">🌙 <span>'+FORECASTS[dayIndex]+'</span></div>' +
@@ -1893,10 +1986,10 @@
         '<div class="stat"><b class="tabular">'+totalAffectionPct()+'%</b><span>Friendship</span></div>' +
       '</div>' +
       '<div class="home-grid">' +
-        '<div class="card" data-go="clubhouse"><div class="ico">🏮</div><h3>Clubhouse</h3><p>Change outfits, hang out with the boys.</p></div>' +
+        '<div class="card" data-go="clubhouse"><div class="ico">🏮</div><h3>Clubhouse</h3><p>'+(state.squad==='boys'?'Check your look, plan your patrol.':'Change outfits, hang out in the Lounge.')+'</p></div>' +
         '<div class="card" data-go="battle"><div class="ico">✨</div><h3>Battle Arena</h3><p>Zap Gloomlings before they reach the stage.</p></div>' +
         '<div class="card" data-go="arcade"><div class="ico">🎮</div><h3>Mini-Games</h3><p>Rhythm Tap and Memory Match.</p></div>' +
-        '<div class="card" data-go="clubhouse-lounge"><div class="ico">💬</div><h3>Lounge</h3><p>Say hi to Hae, Bit and Nun.</p></div>' +
+        '<div class="card" data-go="clubhouse-lounge"><div class="ico">💬</div><h3>Lounge</h3><p>Say hi to '+loungeCastFor(state.squad).map(function(m){return m.name;}).join(', ')+'.</p></div>' +
         '<div class="card" data-go="study" style="grid-column:1/-1;"><div class="ico">📚</div><h3>Study Hall</h3><p>Math, grammar and reading for Star Points.</p></div>' +
       '</div>';
     Array.prototype.forEach.call(stageEl.querySelectorAll('[data-go]'), function(el){
@@ -1908,8 +2001,9 @@
     });
   }
   function totalAffectionPct(){
-    var sum=0; for(var k in state.affection){ sum += state.affection[k]; }
-    return Math.round(sum/(LANTERNBOYS.length*100)*100);
+    var cast = loungeCastFor(state.squad);
+    var sum=0; cast.forEach(function(m){ sum += state.affection[m.id] || 0; });
+    return Math.round(sum/(cast.length*100)*100);
   }
 
   // ---------------- CLUBHOUSE ----------------
@@ -1932,7 +2026,28 @@
     else renderLounge();
   }
 
+  function renderWardrobePlaceholder(label){
+    var body = document.getElementById('clubBody');
+    var m = state.hunter ? npcById(state.hunter) : null;
+    body.innerHTML =
+      '<div class="closet-preview">'+
+        '<div class="avatar" style="--av:130px;"><img class="sprite-img" src="'+(m?castMemberSpriteCanvas(m).toDataURL():'')+'" alt="'+(m?m.name:'')+'"></div>' +
+      '</div>' +
+      '<div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">' +
+        '<div><div class="eyebrow" style="margin-bottom:2px;">Your Squad</div><div style="font-weight:800;">'+(m ? m.name+' — '+castMemberSubtitle(m) : 'Unassigned')+'</div></div>' +
+        '<button class="btn btn-ghost" id="changeHunterBtn">Change</button>' +
+      '</div>' +
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">'+label+'</div>' +
+        '<p style="color:var(--dim); font-size:13px; margin:6px 0 0;">'+(m?m.name:'Your Lanternboy')+'\'s look is set — no wardrobe here yet. Pop into the Lounge to hang out with the Hunters instead.</p>' +
+      '</div>';
+    var changeBtn = document.getElementById('changeHunterBtn');
+    if(changeBtn) changeBtn.addEventListener('click', function(){ setScreen('select-hunter'); });
+    return true;
+  }
+
   function renderCloset(){
+    if(state.squad==='boys') return renderWardrobePlaceholder('Closet');
     var body = document.getElementById('clubBody');
     var html = '<div class="closet-preview">'+avatarHTML(state.equipped,'130px')+'</div><div class="swatch-grid">';
     OUTFITS.forEach(function(o){
@@ -1977,6 +2092,7 @@
   };
 
   function renderStyle(){
+    if(state.squad==='boys') return renderWardrobePlaceholder('Style');
     var body = document.getElementById('clubBody');
     var html = '<div class="closet-preview">'+avatarHTML(state.equipped,'130px')+'</div>';
 
@@ -2076,6 +2192,7 @@
   }
 
   function renderWeapons(){
+    if(state.squad==='boys') return renderWardrobePlaceholder('Weapons');
     var body = document.getElementById('clubBody');
     var equippedWeapon = weaponById(state.equippedWeapon);
     var html = '<div class="closet-preview">'+avatarHTML(state.equipped,'130px',true,state.equippedWeapon)+'</div><div class="swatch-grid">';
@@ -2113,23 +2230,24 @@
   }
 
   var loungeLineIndex = {};
-  LANTERNBOYS.forEach(function(b){ loungeLineIndex[b.id] = 0; });
+  LANTERNBOYS.concat(HUNTERS).forEach(function(m){ loungeLineIndex[m.id] = 0; });
   function renderLounge(){
     var body = document.getElementById('clubBody');
     body.innerHTML = '<div class="boy-list"></div>';
     var list = body.querySelector('.boy-list');
-    LANTERNBOYS.forEach(function(b){
-      var pct = state.affection[b.id];
+    var cast = loungeCastFor(state.squad);
+    cast.forEach(function(m){
+      var pct = state.affection[m.id];
       var row = document.createElement('div');
       row.className = 'boy-row';
       row.innerHTML =
-        '<div class="lantern-av" style="--bcolor:'+b.color+'"><img class="lantern-sprite" src="'+getLanternSprite(b.id).toDataURL()+'" alt="'+b.name+'"></div>' +
+        '<div class="lantern-av" style="--bcolor:'+castMemberColor(m)+'"><img class="lantern-sprite" src="'+castMemberSpriteCanvas(m).toDataURL()+'" alt="'+m.name+'"></div>' +
         '<div class="boy-info">' +
-          '<div class="name">'+b.name+'</div>' +
-          '<div class="role">'+b.role+'</div>' +
+          '<div class="name">'+m.name+'</div>' +
+          '<div class="role">'+castMemberSubtitle(m)+'</div>' +
           '<div class="affection-bar"><div class="affection-fill" style="width:'+pct+'%"></div></div>' +
         '</div>';
-      row.addEventListener('click', function(){ openDialogue(b.id); });
+      row.addEventListener('click', function(){ openDialogue(m.id); });
       list.appendChild(row);
     });
   }
@@ -2142,7 +2260,7 @@
   var AFFECTION_MILESTONES = [25, 50, 75, 100];
 
   function checkAffectionMilestone(boyId, before, after){
-    var b = boyById(boyId);
+    var b = npcById(boyId);
     AFFECTION_MILESTONES.forEach(function(m){
       if(before < m && after >= m){
         var bonus = m===100 ? 15 : 5;
@@ -2155,7 +2273,7 @@
   }
 
   function openDialogue(boyId, showGifts){
-    var b = boyById(boyId);
+    var b = npcById(boyId);
     var body = document.getElementById('clubBody');
     var line = b.lines[loungeLineIndex[boyId] % b.lines.length];
     var giftRow = !showGifts ? '' :
@@ -2171,8 +2289,8 @@
       '</div>';
     body.innerHTML =
       '<div class="dialogue-card">' +
-        '<div class="lantern-av" style="--bcolor:'+b.color+';width:76px;height:76px;"><img class="lantern-sprite" src="'+getLanternSprite(boyId).toDataURL()+'" alt="'+b.name+'"></div>' +
-        '<div><b>'+b.name+'</b><div class="role" style="color:var(--dim);font-size:12px;">'+b.role+'</div></div>' +
+        '<div class="lantern-av" style="--bcolor:'+castMemberColor(b)+';width:76px;height:76px;"><img class="lantern-sprite" src="'+castMemberSpriteCanvas(b).toDataURL()+'" alt="'+b.name+'"></div>' +
+        '<div><b>'+b.name+'</b><div class="role" style="color:var(--dim);font-size:12px;">'+castMemberSubtitle(b)+'</div></div>' +
         '<div class="dialogue-bubble" id="dlgLine">"'+line+'"</div>' +
         '<div class="affection-bar" style="width:100%;"><div class="affection-fill" id="dlgFill" style="width:'+state.affection[boyId]+'%"></div></div>' +
         giftRow +
@@ -2595,7 +2713,7 @@
     }
 
     function drawPlayer(){
-      var sprite = getPlayerSprite(state.equipped, state.equippedWeapon);
+      var sprite = playableSprite();
       var w = 64, h = 88;
       ctx.save();
       ctx.translate(player.x, GROUND_Y);
@@ -3113,7 +3231,7 @@
       }
     }
     function drawBasket(){
-      var sprite = getPlayerSprite(state.equipped, state.equippedWeapon);
+      var sprite = playableSprite();
       var w=52, h=72;
       ctx.drawImage(sprite, basketX-w/2, BASKET_Y-h, w, h);
     }
@@ -3403,7 +3521,7 @@
       }
     }
     function drawPlayer(){
-      var sprite = getPlayerSprite(state.equipped, state.equippedWeapon);
+      var sprite = playableSprite();
       var w=54, h=74;
       ctx.save();
       if(flashTimer>0 && Math.floor(flashTimer/3)%2===0) ctx.globalAlpha = 0.35;
