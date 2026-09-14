@@ -1334,12 +1334,15 @@
     return canvas;
   }
 
-  function renderBossVector(){
+  function renderBossVector(bodyColor, crownColor, eyeColor){
+    bodyColor = bodyColor || '#7C3AED';
+    crownColor = crownColor || '#FFC15E';
+    eyeColor = eyeColor || '#FF5FA2';
     var canvas = document.createElement('canvas');
     canvas.width = 140; canvas.height = 140;
     var ctx = canvas.getContext('2d');
     var cx = 70, cy = 68;
-    var bodyColor = '#7C3AED', shadow = toCss(darken(hexToInt(bodyColor), 0.6));
+    var shadow = toCss(darken(hexToInt(bodyColor), 0.6));
 
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,.4)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = 6;
@@ -1356,7 +1359,7 @@
     ctx.fill();
     ctx.restore();
 
-    ctx.fillStyle = '#FFC15E';
+    ctx.fillStyle = crownColor;
     ctx.beginPath();
     ctx.moveTo(cx-26, cy-46); ctx.lineTo(cx-26, cy-62);
     ctx.lineTo(cx-13, cy-46); ctx.lineTo(cx, cy-64);
@@ -1364,7 +1367,7 @@
     ctx.lineTo(cx+26, cy-46);
     ctx.closePath(); ctx.fill();
     [-13, 0, 13].forEach(function(dx){
-      ctx.fillStyle = '#FF5FA2';
+      ctx.fillStyle = eyeColor;
       ctx.beginPath(); ctx.arc(cx+dx, cy-50, 3.2, 0, Math.PI*2); ctx.fill();
     });
 
@@ -1372,7 +1375,7 @@
       ctx.save();
       ctx.translate(cx+dx, cy-4);
       ctx.rotate(i===0 ? -0.25 : 0.25);
-      ctx.fillStyle = '#FF5FA2';
+      ctx.fillStyle = eyeColor;
       ctx.beginPath(); ctx.ellipse(0, 0, 9, 6, 0, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle = '#241A2E';
       ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, Math.PI*2); ctx.fill();
@@ -1618,10 +1621,10 @@
     var canvas = renderGloomlingVector(colorHex);
     return (spriteCache[key] = canvas);
   }
-  function getBossSprite(){
-    var key = 'boss';
+  function getBossSprite(bodyColor, crownColor, eyeColor){
+    var key = 'boss:'+bodyColor+':'+crownColor+':'+eyeColor;
     if(spriteCache[key]) return spriteCache[key];
-    var canvas = renderBossVector();
+    var canvas = renderBossVector(bodyColor, crownColor, eyeColor);
     return (spriteCache[key] = canvas);
   }
   function getLanternSprite(boyId){
@@ -2673,16 +2676,27 @@
   }
 
   // ---------------- ALLEY BRAWL (beat-'em-up patrol) ----------------
-  var BRAWL_WAVES = 3;
+  var BRAWL_LEVELS = [
+    { name:'The Alley', tint:'#0F0A22', lineTint:'rgba(245,239,255,.07)', bossName:'Grumble King', bossColor:'#7C3AED', crownColor:'#FFC15E', eyeColor:'#FF5FA2' },
+    { name:'Rooftop Chase', tint:'#0A1430', lineTint:'rgba(150,220,255,.09)', bossName:'Static Widow', bossColor:'#1F5C4A', crownColor:'#52E8C6', eyeColor:'#FFD36E' },
+    { name:'Neon Arcade', tint:'#1C0A2E', lineTint:'rgba(255,150,220,.09)', bossName:'Nightmare Warden', bossColor:'#5C1F3A', crownColor:'#FF5FA2', eyeColor:'#8E7CFF' }
+  ];
+  var BRAWL_WAVES_PER_LEVEL = 2;
   var BRAWL_HEARTS = 3;
-  var BRAWL_BOSS_HEALTH = 8;
+  var BRAWL_BOSS_BASE_HEALTH = 8;
+  var BRAWL_SCROLL_DURATION = 40;
+  var ENEMY_TYPES = {
+    imp:     { hp:1, speedMin:1.1, speedMax:1.7, r:24, scoreValue:2 },
+    brute:   { hp:2, speedMin:0.6, speedMax:0.8, r:34, scoreValue:5 },
+    charger: { hp:1, speedMin:0.9, speedMax:1.1, chargeSpeed:3.4, r:24, scoreValue:3 }
+  };
 
   function renderBrawlIntro(){
     stageEl.innerHTML =
       '<div class="card" style="text-align:center;">' +
         '<div class="eyebrow">Alley Brawl</div>' +
-        '<h2 style="margin:4px 0;">Walk up and zap &#39;em</h2>' +
-        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Move left and right down the alley, punch Gloomlings before they bump you. Clear 3 waves, then take down the Grumble King. You&#39;ve got 3 hearts.</p>' +
+        '<h2 style="margin:4px 0;">Fight your way through 3 levels</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Move left and right, punch the demons before they bump you. Watch for tough Brutes and fast Chargers. Clear each level\'s waves, beat its boss, and the alley scrolls on to the next one. You&#39;ve got 3 hearts.</p>' +
         '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.brawl+'</b></div>' +
         '<button class="btn btn-primary" id="startBrawl" style="margin-top:12px; width:100%;">Start Brawl</button>' +
         '<button class="btn btn-ghost" id="backBattleHub2" style="margin-top:8px; width:100%;">Back</button>' +
@@ -2693,7 +2707,7 @@
 
   function runBrawl(){
     stageEl.innerHTML =
-      '<div class="battle-hud"><span class="hearts-row" id="brHearts">❤️❤️❤️</span><span id="brWave">Wave 1/'+BRAWL_WAVES+'</span><span>Score <b class="tabular" id="brScore">0</b></span></div>' +
+      '<div class="battle-hud"><span class="hearts-row" id="brHearts">❤️❤️❤️</span><span id="brWave">'+BRAWL_LEVELS[0].name+' · Wave 1/'+BRAWL_WAVES_PER_LEVEL+'</span><span>Score <b class="tabular" id="brScore">0</b></span></div>' +
       '<div class="battle-wrap brawl-arena"><canvas id="brawlCanvas" width="400" height="380"></canvas></div>' +
       '<div class="brawl-controls">' +
         '<div class="brawl-btn" id="brLeft">◀</div>' +
@@ -2709,7 +2723,8 @@
     var GROUND_Y = 300;
 
     var running = true, rafId = null;
-    var score = 0, hearts = BRAWL_HEARTS, waveNum = 1, bossPhase = false, ended = false;
+    var score = 0, hearts = BRAWL_HEARTS, level = 0, waveNum = 1, bossPhase = false, ended = false;
+    var scrollT = 0;
     var player = { x: W/2, facing: 1, invincible: 0 };
     var punchActive = 0, punchCooldown = 0, punchId = 0;
     var punchRangeBonus = (weaponById(state.equippedWeapon).bonus || {}).punchRange || 0;
@@ -2728,24 +2743,41 @@
       }
     }
 
+    function pickEnemyType(){
+      var r = Math.random();
+      if(level===0) return r<0.7 ? 'imp' : 'brute';
+      if(level===1) return r<0.45 ? 'imp' : (r<0.75 ? 'brute' : 'charger');
+      return r<0.3 ? 'imp' : (r<0.6 ? 'brute' : 'charger');
+    }
+
+    function updateWaveLabel(){
+      waveEl.textContent = BRAWL_LEVELS[level].name + ' · Wave ' + waveNum + '/' + BRAWL_WAVES_PER_LEVEL;
+    }
+
     function queueWave(n){
-      var count = 3 + n;
+      var count = 3 + n + level;
       spawnQueue = [];
-      for(var i=0;i<count;i++){ spawnQueue.push(Math.random()<0.5 ? 'left' : 'right'); }
-      waveEl.textContent = 'Wave '+n+'/'+BRAWL_WAVES;
+      for(var i=0;i<count;i++){ spawnQueue.push({ side: Math.random()<0.5 ? 'left' : 'right', type: pickEnemyType() }); }
+      updateWaveLabel();
     }
     queueWave(waveNum);
 
-    function spawnEnemy(side){
+    function spawnEnemy(side, type){
+      var def = ENEMY_TYPES[type];
       var colors = ['#52E8C6','#8E7CFF','#FF8B5E','#FFD36E'];
       enemies.push({
+        type: type,
         x: side==='left' ? -20 : W+20,
-        r: 26,
-        speed: 1.1 + Math.random()*0.5,
+        r: def.r,
+        speed: def.speedMin + Math.random()*(def.speedMax-def.speedMin),
+        hp: def.hp, maxHp: def.hp,
         color: colors[Math.floor(Math.random()*colors.length)],
         hitPunchId: -1,
         bumpCooldown: 0,
-        age: 0
+        staggerTimer: 0,
+        age: 0,
+        chargeState: type==='charger' ? 'approach' : null,
+        chargeTimer: 0
       });
     }
 
@@ -2771,25 +2803,33 @@
       if(hearts<=0) endBrawl(false);
     }
 
-    function drawGround(ts){
-      ctx.fillStyle = '#0F0A22';
-      ctx.fillRect(0,0,W,H);
-      drawStarfield(ctx, stars, ts);
-
-      var vanishX = W/2, vanishY = GROUND_Y - 210;
-      ctx.strokeStyle = 'rgba(245,239,255,.07)';
+    function drawGroundLayer(shiftX, lv){
+      ctx.fillStyle = lv.tint;
+      ctx.fillRect(shiftX, 0, W, H);
+      var vanishX = shiftX + W/2, vanishY = GROUND_Y - 210;
+      ctx.strokeStyle = lv.lineTint;
       ctx.lineWidth = 1;
       [16, 90, W-90, W-16].forEach(function(x){
         ctx.beginPath();
         ctx.moveTo(vanishX, vanishY);
-        ctx.lineTo(x, GROUND_Y+34);
+        ctx.lineTo(shiftX+x, GROUND_Y+34);
         ctx.stroke();
       });
-
       ctx.fillStyle = 'rgba(255,255,255,.05)';
-      for(var gx=0; gx<W; gx+=40){ ctx.fillRect(gx, GROUND_Y+34, 26, 3); }
+      for(var gx=0; gx<W; gx+=40){ ctx.fillRect(shiftX+gx, GROUND_Y+34, 26, 3); }
       ctx.fillStyle = 'rgba(245,239,255,.12)';
-      ctx.fillRect(0, GROUND_Y+30, W, 2);
+      ctx.fillRect(shiftX, GROUND_Y+30, W, 2);
+    }
+
+    function drawGround(ts){
+      if(scrollT>0){
+        var shift = (1 - scrollT/BRAWL_SCROLL_DURATION) * W;
+        drawGroundLayer(-shift, BRAWL_LEVELS[level]);
+        drawGroundLayer(W-shift, BRAWL_LEVELS[Math.min(level+1, BRAWL_LEVELS.length-1)]);
+      } else {
+        drawGroundLayer(0, BRAWL_LEVELS[level]);
+      }
+      drawStarfield(ctx, stars, ts);
     }
 
     function drawPlayer(){
@@ -2814,16 +2854,25 @@
     function drawEnemy(e){
       var sprite = getGloomlingSprite(e.color);
       var pop = Math.min(1, e.age/14);
-      var scale = 0.45 + 0.55*(pop*(2-pop));
+      var windingUp = e.chargeState==='winding' && Math.floor(e.age/4)%2===0;
+      var scale = (0.45 + 0.55*(pop*(2-pop))) * (e.type==='brute' ? 1.15 : 1);
       var s = e.r*2.1*scale;
       ctx.save();
+      if(windingUp) ctx.filter = 'brightness(1.6) saturate(2) hue-rotate(-20deg)';
       ctx.globalAlpha = 0.5 + 0.5*pop;
       ctx.drawImage(sprite, e.x-s/2, GROUND_Y-s, s, s);
+      ctx.filter = 'none';
       ctx.restore();
+      if(e.maxHp>1){
+        var pipW = 22, pipX = e.x-pipW/2, pipY = GROUND_Y-s-8;
+        ctx.fillStyle = 'rgba(255,255,255,.2)'; ctx.fillRect(pipX, pipY, pipW, 4);
+        ctx.fillStyle = '#52E8C6'; ctx.fillRect(pipX, pipY, pipW*(e.hp/e.maxHp), 4);
+      }
     }
 
     function drawBoss(b){
-      var sprite = getBossSprite();
+      var lv = BRAWL_LEVELS[level];
+      var sprite = getBossSprite(lv.bossColor, lv.crownColor, lv.eyeColor);
       var pop = Math.min(1, (b.age||20)/20);
       var s = 100 * (0.5 + 0.5*(pop*(2-pop)));
       ctx.save();
@@ -2834,16 +2883,49 @@
       ctx.restore();
       var barW=140, barX=b.x-barW/2, barY=GROUND_Y-s-24;
       ctx.fillStyle='rgba(255,255,255,.15)'; ctx.fillRect(barX,barY,barW,9);
-      ctx.fillStyle='#FF5FA2'; ctx.fillRect(barX,barY,barW*(b.health/BRAWL_BOSS_HEALTH),9);
+      ctx.fillStyle='#FF5FA2'; ctx.fillRect(barX,barY,barW*(b.health/b.maxHealth),9);
       ctx.strokeStyle='rgba(255,255,255,.4)'; ctx.strokeRect(barX,barY,barW,9);
       ctx.fillStyle='#F5EFFF'; ctx.font='11px "Baloo 2", sans-serif'; ctx.textAlign='center';
-      ctx.fillText('GRUMBLE KING', b.x, barY-6);
+      ctx.fillText(lv.bossName.toUpperCase(), b.x, barY-6);
       if(bossHitFlash>0) bossHitFlash--;
+    }
+
+    function afterWaveCleared(){
+      if(waveNum < BRAWL_WAVES_PER_LEVEL){
+        waveNum++;
+        wavePause = 70;
+        showToast('Wave cleared!');
+        queueWave(waveNum);
+      } else {
+        bossPhase = true;
+        var lv = BRAWL_LEVELS[level];
+        waveEl.textContent = lv.name + ' · BOSS';
+        boss = { x: W+40, health: BRAWL_BOSS_BASE_HEALTH+level*2, maxHealth: BRAWL_BOSS_BASE_HEALTH+level*2, bumpCooldown: 0, lastHitId: -1, age: 0 };
+        showToast(lv.bossName+' blocks the way!');
+        beep(140,.3,'sawtooth');
+      }
+    }
+
+    function startLevelTransition(){
+      scrollT = BRAWL_SCROLL_DURATION;
+      wavePause = BRAWL_SCROLL_DURATION + 15;
+      showToast(BRAWL_LEVELS[level].name + ' clear!');
     }
 
     function frame(ts){
       if(!running) return;
       drawGround(ts);
+
+      if(scrollT>0){
+        scrollT--;
+        if(scrollT<=0){
+          level++;
+          bossPhase = false;
+          waveNum = 1;
+          queueWave(waveNum);
+          showToast('Entering ' + BRAWL_LEVELS[level].name + '!');
+        }
+      }
 
       if(keysDown.left){ player.x -= 3; player.facing = -1; }
       if(keysDown.right){ player.x += 3; player.facing = 1; }
@@ -2852,42 +2934,52 @@
       if(punchCooldown>0) punchCooldown--;
       if(punchActive>0) punchActive--;
 
-      if(!bossPhase && !ended){
+      if(!bossPhase && !ended && scrollT<=0){
         if(wavePause>0){
           wavePause--;
         } else if(spawnQueue.length){
           spawnTimer--;
-          if(spawnTimer<=0){ spawnEnemy(spawnQueue.shift()); spawnTimer = 55; }
+          if(spawnTimer<=0){ var next = spawnQueue.shift(); spawnEnemy(next.side, next.type); spawnTimer = 55; }
         } else if(!enemies.length){
-          if(waveNum < BRAWL_WAVES){
-            waveNum++;
-            wavePause = 70;
-            showToast('Wave cleared!');
-            queueWave(waveNum);
-          } else {
-            bossPhase = true;
-            waveEl.textContent = 'BOSS!';
-            boss = { x: W+40, health: BRAWL_BOSS_HEALTH, bumpCooldown: 0, lastHitId: -1, age: 0 };
-            showToast('The Grumble King blocks the alley!');
-            beep(140,.3,'sawtooth');
-          }
+          afterWaveCleared();
         }
       }
 
       for(var i=enemies.length-1;i>=0;i--){
         var e = enemies[i];
         e.age++;
-        e.x += (player.x < e.x ? -1 : 1) * e.speed;
         if(e.bumpCooldown>0) e.bumpCooldown--;
+
+        if(e.type==='charger'){
+          var toPlayer = player.x - e.x;
+          if(e.chargeState==='approach'){
+            e.x += (toPlayer<0?-1:1) * e.speed;
+            if(Math.abs(toPlayer) < 130){ e.chargeState = 'winding'; e.chargeTimer = 22; }
+          } else if(e.chargeState==='winding'){
+            e.chargeTimer--;
+            if(e.chargeTimer<=0) e.chargeState = 'charging';
+          } else if(e.chargeState==='charging'){
+            e.x += (toPlayer<0?-1:1) * ENEMY_TYPES.charger.chargeSpeed;
+          }
+        } else if(e.staggerTimer>0){
+          e.staggerTimer--;
+        } else {
+          e.x += (player.x < e.x ? -1 : 1) * e.speed;
+        }
         drawEnemy(e);
 
         var dx = e.x - player.x;
         if(punchActive>0 && e.hitPunchId!==punchId && Math.sign(dx||1)===player.facing && Math.abs(dx)<46+punchRangeBonus){
           e.hitPunchId = punchId;
+          e.hp--;
           spawnParticles(e.x, GROUND_Y-24, e.color);
-          score += 2; scoreEl.textContent = score;
           beep(700,.08,'triangle');
-          enemies.splice(i,1);
+          if(e.hp<=0){
+            score += ENEMY_TYPES[e.type].scoreValue; scoreEl.textContent = score;
+            enemies.splice(i,1);
+          } else {
+            e.staggerTimer = 10;
+          }
           continue;
         }
         if(Math.abs(dx)<28 && e.bumpCooldown<=0){
@@ -2905,14 +2997,18 @@
             boss.lastHitId = punchId;
             boss.health--;
             bossHitFlash = 6;
-            spawnParticles(boss.x, GROUND_Y-40, '#7C3AED');
+            spawnParticles(boss.x, GROUND_Y-40, BRAWL_LEVELS[level].bossColor);
             beep(220,.1,'sawtooth');
             if(boss.health<=0){
               spawnParticles(boss.x, GROUND_Y-40, '#FF5FA2');
               spawnParticles(boss.x, GROUND_Y-40, '#FFC15E');
               score += 30; scoreEl.textContent = score;
               boss = null;
-              endBrawl(true);
+              if(level < BRAWL_LEVELS.length-1){
+                startLevelTransition();
+              } else {
+                endBrawl(true);
+              }
             }
           }
         } else if(Math.abs(bdx)<40 && (!boss.bumpCooldown || boss.bumpCooldown<=0)){
@@ -2983,7 +3079,7 @@
       var wrap = stageEl.querySelector('.battle-wrap');
       wrap.insertAdjacentHTML('beforeend',
         '<div class="overlay-center">' +
-          '<h2 style="margin:0;">'+(won ? 'Alley Clear!' : 'Patrol Interrupted')+'</h2>' +
+          '<h2 style="margin:0;">'+(won ? 'Alley Cleared!' : 'Patrol Interrupted')+'</h2>' +
           '<p style="color:var(--dim); margin:0;">Score <b class="tabular" style="color:var(--cream);">'+score+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
           '<button class="btn btn-primary" id="brawlAgain">Brawl Again</button>' +
           '<button class="btn btn-ghost" id="brawlDone">Back to Battle Menu</button>' +
