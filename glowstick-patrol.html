@@ -609,6 +609,31 @@
       ]}
   ];
 
+  var BOY_OUTFITS = [
+    {id:'patrol',   name:'Patrol Tunic',  cost:0,   tunic:'#3A3160', icon:'🏮'},
+    {id:'ember',    name:'Ember Jacket',  cost:40,  tunic:'#7A3B2A', icon:'🔥'},
+    {id:'frost',    name:'Frost Coat',    cost:40,  tunic:'#1F4C5C', icon:'❄️'},
+    {id:'moss',     name:'Moss Vest',     cost:60,  tunic:'#2E5C3A', icon:'🍃'},
+    {id:'twilight', name:'Twilight Cloak',cost:90,  tunic:'#3B2A6B', icon:'🌙'},
+    {id:'gilded',   name:'Gilded Coat',   cost:150, tunic:'#5C4A1F', icon:'🏆'}
+  ];
+  function boyOutfitById(id){
+    for(var i=0;i<BOY_OUTFITS.length;i++){ if(BOY_OUTFITS[i].id===id) return BOY_OUTFITS[i]; }
+    return BOY_OUTFITS[0];
+  }
+
+  var BOY_POWERUPS = [
+    {id:'wick',    name:'Practice Wick',  cost:0,   glow:'#FFC15E', desc:'Your trusty starter flame.'},
+    {id:'ember',   name:'Ember Core',     cost:60,  glow:'#FF8B5E', desc:'+10% score in Zap Patrol.', bonus:{zapScore:0.10}},
+    {id:'storm',   name:'Storm Wick',     cost:90,  glow:'#8E7CFF', desc:'Longer punch reach in Alley Brawl.', bonus:{punchRange:14}},
+    {id:'solar',   name:'Solar Flame',    cost:140, glow:'#FF5FA2', desc:'+18% score in Zap Patrol.', bonus:{zapScore:0.18}},
+    {id:'galaxy',  name:'Galaxy Wick',    cost:220, glow:'#FFD36E', desc:'Longer reach and bonus Zap score.', bonus:{zapScore:0.12, punchRange:10}}
+  ];
+  function boyPowerupById(id){
+    for(var i=0;i<BOY_POWERUPS.length;i++){ if(BOY_POWERUPS[i].id===id) return BOY_POWERUPS[i]; }
+    return BOY_POWERUPS[0];
+  }
+
   var MEM_ICONS = ['🎤','⭐','🏮','🌙','⚡','🍡'];
 
   var FORECASTS = [
@@ -1453,13 +1478,14 @@
     ctx.closePath();
   }
 
-  function renderLanternVector(boyColor){
+  function renderLanternVector(boyColor, tunicColor, glowColor){
+    tunicColor = tunicColor || '#3A3160';
+    glowColor = glowColor || boyColor;
     var canvas = document.createElement('canvas');
     canvas.width = 256; canvas.height = 352;
     var ctx = canvas.getContext('2d');
     ctx.scale(2, 2);
     var cx = 64, headCy = 40, headR = 25;
-    var tunicColor = '#3A3160';
     var tunicShadow = toCss(darken(hexToInt(tunicColor), 0.62));
     var hairColor = '#241A38';
     var shoeColor = '#170F2E';
@@ -1468,11 +1494,11 @@
     ctx.fillStyle = 'rgba(0,0,0,.28)';
     ctx.beginPath(); ctx.ellipse(cx, 159, 22, 5, 0, 0, Math.PI*2); ctx.fill();
     var circleGlow = ctx.createRadialGradient(cx, 156, 2, cx, 156, 32);
-    circleGlow.addColorStop(0, toRgba(boyColor, 0.38));
-    circleGlow.addColorStop(1, toRgba(boyColor, 0));
+    circleGlow.addColorStop(0, toRgba(glowColor, 0.38));
+    circleGlow.addColorStop(1, toRgba(glowColor, 0));
     ctx.fillStyle = circleGlow;
     ctx.beginPath(); ctx.ellipse(cx, 156, 32, 9, 0, 0, Math.PI*2); ctx.fill();
-    ctx.strokeStyle = toRgba(boyColor, 0.55); ctx.lineWidth = 1;
+    ctx.strokeStyle = toRgba(glowColor, 0.55); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.ellipse(cx, 156, 24, 6.5, 0, 0, Math.PI*2); ctx.stroke();
 
     // short scout cloak, swept behind
@@ -1533,7 +1559,7 @@
     ctx.save(); ctx.translate(cx, 74); ctx.rotate(Math.PI/4); ctx.fillRect(-3, -3, 6, 6); ctx.restore();
 
     // his lantern, held out in front
-    drawLantern(ctx, cx+22, 96, boyColor);
+    drawLantern(ctx, cx+22, 96, glowColor);
 
     // arms + hands
     ctx.strokeStyle = tunicColor; ctx.lineWidth = 12; ctx.lineCap = 'round';
@@ -1646,11 +1672,11 @@
     var canvas = renderBossVector(bodyColor, crownColor, eyeColor);
     return (spriteCache[key] = canvas);
   }
-  function getLanternSprite(boyId){
-    var key = 'lantern:'+boyId;
+  function getLanternSprite(boyId, tunicColor, glowColor){
+    var key = 'lantern:'+boyId+':'+tunicColor+':'+glowColor;
     if(spriteCache[key]) return spriteCache[key];
     var b = boyById(boyId);
-    var canvas = renderLanternVector(b.color);
+    var canvas = renderLanternVector(b.color, tunicColor, glowColor);
     return (spriteCache[key] = canvas);
   }
 
@@ -1676,7 +1702,11 @@
     faceAcc: 'none',
     unlockedFaceAcc: ['none'],
     makeup: 'natural',
-    unlockedMakeup: ['natural']
+    unlockedMakeup: ['natural'],
+    boyOutfit: 'patrol',
+    unlockedBoyOutfits: ['patrol'],
+    boyPowerup: 'wick',
+    unlockedBoyPowerups: ['wick']
   };
 
   var state = loadState();
@@ -1716,6 +1746,10 @@
       merged.unlockedFaceAcc = merged.unlockedFaceAcc || ['none'];
       merged.makeup = merged.makeup || 'natural';
       merged.unlockedMakeup = merged.unlockedMakeup || ['natural'];
+      merged.boyOutfit = merged.boyOutfit || 'patrol';
+      merged.unlockedBoyOutfits = merged.unlockedBoyOutfits || ['patrol'];
+      merged.boyPowerup = merged.boyPowerup || 'wick';
+      merged.unlockedBoyPowerups = merged.unlockedBoyPowerups || ['wick'];
       merged.affection = merged.affection || {};
       LANTERNBOYS.concat(HUNTERS).forEach(function(m){
         if(typeof merged.affection[m.id] !== 'number') merged.affection[m.id] = 0;
@@ -1775,8 +1809,15 @@
   }
   function playableSprite(){
     var squad = state.squad || 'hunters';
-    if(squad==='boys' && state.hunter) return getLanternSprite(state.hunter);
+    if(squad==='boys' && state.hunter){
+      return getLanternSprite(state.hunter, boyOutfitById(state.boyOutfit).tunic, boyPowerupById(state.boyPowerup).glow);
+    }
     return getPlayerSprite(state.equipped, state.equippedWeapon);
+  }
+  function currentPowerupBonus(key){
+    var squad = state.squad || 'hunters';
+    var item = squad==='boys' ? boyPowerupById(state.boyPowerup) : weaponById(state.equippedWeapon);
+    return (item.bonus || {})[key] || 0;
   }
 
   var stageEl = document.getElementById('stage');
@@ -2124,6 +2165,20 @@
     return avatarHTML(state.equipped, sizeVar);
   }
 
+  function boyAvatarHTML(sizeVar, outfitId, powerupId, badgeIcon){
+    var style = '--av:' + (sizeVar||'120px') + ';';
+    var tunic = boyOutfitById(outfitId || state.boyOutfit);
+    var pu = boyPowerupById(powerupId || state.boyPowerup);
+    var boy = state.hunter ? boyById(state.hunter) : null;
+    var src = boy ? getLanternSprite(boy.id, tunic.tunic, pu.glow).toDataURL() : '';
+    return (
+      '<div class="avatar" style="'+style+'">' +
+        '<img class="sprite-img" src="'+src+'" alt="'+(boy?boy.name:'')+'">' +
+        (badgeIcon!==false ? '<div class="badge">'+tunic.icon+'</div>' : '') +
+      '</div>'
+    );
+  }
+
   function renderHome(){
     var dayIndex = new Date().getDate() % FORECASTS.length;
     var playable = state.hunter ? npcById(state.hunter) : null;
@@ -2171,7 +2226,7 @@
       '<div class="subtabs">' +
         '<button class="subtab" data-sub="closet">Closet</button>' +
         '<button class="subtab" data-sub="style">Style</button>' +
-        '<button class="subtab" data-sub="weapons">Weapons</button>' +
+        '<button class="subtab" data-sub="weapons">'+(state.squad==='boys'?'Power-Ups':'Weapons')+'</button>' +
         '<button class="subtab" data-sub="lounge">Lounge</button>' +
       '</div>' +
       '<div id="clubBody"></div>';
@@ -2205,8 +2260,55 @@
     return true;
   }
 
+  function renderBoySquadCard(){
+    var boy = state.hunter ? boyById(state.hunter) : null;
+    var html = '<div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">' +
+      '<div><div class="eyebrow" style="margin-bottom:2px;">Your Squad</div><div style="font-weight:800;">'+(boy ? boy.name+' — '+boy.role : 'Unassigned')+'</div></div>' +
+      '<button class="btn btn-ghost" id="changeHunterBtn">Change</button>' +
+    '</div>';
+    return html;
+  }
+
+  function renderBoyCloset(){
+    var body = document.getElementById('clubBody');
+    var html = '<div class="closet-preview">'+boyAvatarHTML('130px')+'</div>' + renderBoySquadCard() + '<div class="swatch-grid">';
+    BOY_OUTFITS.forEach(function(o){
+      var unlocked = state.unlockedBoyOutfits.indexOf(o.id) !== -1;
+      var equipped = state.boyOutfit === o.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-boyoutfit="'+o.id+'" tabindex="0">' +
+        boyAvatarHTML('54px', o.id, null, false) +
+        '<div class="name">'+o.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wear') : '⭐ '+o.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+    var changeBtn = document.getElementById('changeHunterBtn');
+    if(changeBtn) changeBtn.addEventListener('click', function(){ setScreen('select-hunter'); });
+    Array.prototype.forEach.call(body.querySelectorAll('.swatch'), function(el){
+      el.addEventListener('click', function(){
+        var id = el.dataset.boyoutfit;
+        var o = boyOutfitById(id);
+        var unlocked = state.unlockedBoyOutfits.indexOf(id) !== -1;
+        if(unlocked){
+          state.boyOutfit = id; saveState(); renderBoyCloset(); refreshTopbar();
+        } else if(state.starPoints >= o.cost){
+          state.starPoints -= o.cost;
+          state.unlockedBoyOutfits.push(id);
+          state.boyOutfit = id;
+          saveState(); refreshTopbar(); renderBoyCloset();
+          showToast('Unlocked ' + o.name + '!');
+          beep(880,.15,'triangle');
+        } else {
+          showToast('Need ' + (o.cost - state.starPoints) + ' more Star Points');
+          beep(160,.12,'square');
+        }
+      });
+    });
+  }
+
   function renderCloset(){
-    if(state.squad==='boys') return renderWardrobePlaceholder('Closet');
+    if(state.squad==='boys') return renderBoyCloset();
     var body = document.getElementById('clubBody');
     var html = '<div class="closet-preview">'+avatarHTML(state.equipped,'130px')+'</div><div class="swatch-grid">';
     OUTFITS.forEach(function(o){
@@ -2350,8 +2452,47 @@
     });
   }
 
+  function renderBoyPowerups(){
+    var body = document.getElementById('clubBody');
+    var equippedPowerup = boyPowerupById(state.boyPowerup);
+    var html = '<div class="closet-preview">'+boyAvatarHTML('130px')+'</div>' + renderBoySquadCard() + '<div class="swatch-grid">';
+    BOY_POWERUPS.forEach(function(p){
+      var unlocked = state.unlockedBoyPowerups.indexOf(p.id) !== -1;
+      var equipped = state.boyPowerup === p.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-boypowerup="'+p.id+'" tabindex="0">' +
+        boyAvatarHTML('54px', null, p.id, false) +
+        '<div class="name">'+p.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to wield') : '⭐ '+p.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div><p style="font-size:11.5px;color:var(--dim);text-align:center;margin-top:10px;">'+equippedPowerup.desc+'</p>';
+    body.innerHTML = html;
+    var changeBtn = document.getElementById('changeHunterBtn');
+    if(changeBtn) changeBtn.addEventListener('click', function(){ setScreen('select-hunter'); });
+    Array.prototype.forEach.call(body.querySelectorAll('.swatch'), function(el){
+      el.addEventListener('click', function(){
+        var id = el.dataset.boypowerup;
+        var p = boyPowerupById(id);
+        var unlocked = state.unlockedBoyPowerups.indexOf(id) !== -1;
+        if(unlocked){
+          state.boyPowerup = id; saveState(); renderBoyPowerups(); refreshTopbar();
+        } else if(state.starPoints >= p.cost){
+          state.starPoints -= p.cost;
+          state.unlockedBoyPowerups.push(id);
+          state.boyPowerup = id;
+          saveState(); refreshTopbar(); renderBoyPowerups();
+          showToast('Unlocked ' + p.name + '!');
+          beep(880,.15,'triangle');
+        } else {
+          showToast('Need ' + (p.cost - state.starPoints) + ' more Star Points');
+          beep(160,.12,'square');
+        }
+      });
+    });
+  }
+
   function renderWeapons(){
-    if(state.squad==='boys') return renderWardrobePlaceholder('Weapons');
+    if(state.squad==='boys') return renderBoyPowerups();
     var body = document.getElementById('clubBody');
     var equippedWeapon = weaponById(state.equippedWeapon);
     var html = '<div class="closet-preview">'+avatarHTML(state.equipped,'130px',true,state.equippedWeapon)+'</div><div class="swatch-grid">';
@@ -2725,7 +2866,7 @@
       running = false;
       clearInterval(timerId);
       cancelAnimationFrame(rafId);
-      var zapBonus = (weaponById(state.equippedWeapon).bonus || {}).zapScore || 0;
+      var zapBonus = currentPowerupBonus('zapScore');
       score = Math.round(score * (1 + zapBonus));
       var earned = Math.max(5, Math.round(score/2));
       earnPoints(earned);
@@ -2806,7 +2947,7 @@
     var scrollT = 0;
     var player = { x: W/2, facing: 1, invincible: 0 };
     var punchActive = 0, punchCooldown = 0, punchId = 0;
-    var punchRangeBonus = (weaponById(state.equippedWeapon).bonus || {}).punchRange || 0;
+    var punchRangeBonus = currentPowerupBonus('punchRange');
     var enemies = [];
     var boss = null, bossHitFlash = 0;
     var spawnQueue = [], spawnTimer = 0;
