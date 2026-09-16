@@ -164,7 +164,7 @@
   .tabbar{
     flex:none;
     display:grid;
-    grid-template-columns:repeat(5,1fr);
+    grid-template-columns:repeat(6,1fr);
     gap:3px;
     padding:8px 8px calc(10px + env(safe-area-inset-bottom));
     border-top:1px solid var(--line);
@@ -445,6 +445,7 @@
       <button class="tab-btn" data-screen="battle"><span class="ico">✨</span>Battle</button>
       <button class="tab-btn" data-screen="arcade"><span class="ico">🎮</span>Games</button>
       <button class="tab-btn" data-screen="study"><span class="ico">📚</span>Study</button>
+      <button class="tab-btn" data-screen="pets"><span class="ico">🐾</span>Pets</button>
     </div>
     <div class="toast" id="toast"></div>
   </div>
@@ -633,6 +634,20 @@
     for(var i=0;i<BOY_POWERUPS.length;i++){ if(BOY_POWERUPS[i].id===id) return BOY_POWERUPS[i]; }
     return BOY_POWERUPS[0];
   }
+
+  var PET_COLORS = [
+    {id:'pink',   name:'Leucistic Pink', cost:0,   hex:'#FFC2D9'},
+    {id:'wild',   name:'Wild Type',      cost:20,  hex:'#8C9E5E'},
+    {id:'black',  name:'Melanoid',       cost:35,  hex:'#3B2E4A'},
+    {id:'gold',   name:'Golden Albino',  cost:50,  hex:'#FFD97A'},
+    {id:'blue',   name:'Rare Blue',      cost:80,  hex:'#7FC7E8'},
+    {id:'copper', name:'Copper',         cost:65,  hex:'#C97B4A'}
+  ];
+  function petColorById(id){
+    for(var i=0;i<PET_COLORS.length;i++){ if(PET_COLORS[i].id===id) return PET_COLORS[i]; }
+    return PET_COLORS[0];
+  }
+  var PET_NAME = 'Axo';
 
   var MEM_ICONS = ['🎤','⭐','🏮','🌙','⚡','🍡'];
 
@@ -1346,6 +1361,70 @@
     return canvas;
   }
 
+  function renderAxolotlVector(bodyColor){
+    var canvas = document.createElement('canvas');
+    canvas.width = 160; canvas.height = 120;
+    var ctx = canvas.getContext('2d');
+    var cx = 74, cy = 64;
+    var shadow = toCss(darken(hexToInt(bodyColor), 0.7));
+    var frill = '#FF7FA6';
+
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,.25)'; ctx.shadowBlur = 8; ctx.shadowOffsetY = 5;
+
+    // tail
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.moveTo(cx-30, cy+2);
+    ctx.quadraticCurveTo(cx-58, cy-16, cx-66, cy+4);
+    ctx.quadraticCurveTo(cx-56, cy+22, cx-28, cy+14);
+    ctx.closePath(); ctx.fill();
+
+    // legs
+    ctx.fillStyle = bodyColor;
+    [[cx-22, cy+22],[cx-22, cy-20],[cx+22, cy+24],[cx+22, cy-22]].forEach(function(p){
+      ctx.beginPath(); ctx.ellipse(p[0], p[1], 8, 6, 0, 0, Math.PI*2); ctx.fill();
+    });
+
+    // body
+    var grad = ctx.createRadialGradient(cx-8, cy-12, 6, cx, cy, 50);
+    grad.addColorStop(0, '#FFFFFF'); grad.addColorStop(0.22, bodyColor); grad.addColorStop(1, shadow);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(cx, cy, 40, 24, 0, 0, Math.PI*2); ctx.fill();
+
+    // head
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath(); ctx.ellipse(cx+36, cy-4, 24, 20, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // belly highlight
+    ctx.fillStyle = 'rgba(255,255,255,.3)';
+    ctx.beginPath(); ctx.ellipse(cx+2, cy+12, 24, 10, 0, 0, Math.PI*2); ctx.fill();
+
+    // external gills — 3 frilly antennae fanning from the top of the head
+    for(var i=0;i<3;i++){
+      var ang = -Math.PI/2 + (i-1)*0.5;
+      var baseX = cx+22, baseY = cy-14;
+      var tipX = baseX + Math.cos(ang)*16;
+      var tipY = baseY + Math.sin(ang)*16;
+      ctx.strokeStyle = frill; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(baseX, baseY); ctx.lineTo(tipX, tipY); ctx.stroke();
+      ctx.fillStyle = frill;
+      ctx.beginPath(); ctx.arc(tipX, tipY, 3, 0, Math.PI*2); ctx.fill();
+    }
+
+    // eyes
+    ctx.fillStyle = '#241A2E';
+    ctx.beginPath(); ctx.arc(cx+30, cy-8, 2.6, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx+44, cy-6, 2.6, 0, Math.PI*2); ctx.fill();
+
+    // the iconic axolotl smile
+    ctx.strokeStyle = shadow; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cx+38, cy+2, 6, 0.1*Math.PI, 0.7*Math.PI); ctx.stroke();
+
+    return canvas;
+  }
+
   function renderGloomlingVector(bodyColor){
     var canvas = document.createElement('canvas');
     canvas.width = 96; canvas.height = 96;
@@ -1666,6 +1745,12 @@
     var canvas = renderGloomlingVector(colorHex);
     return (spriteCache[key] = canvas);
   }
+  function getAxolotlSprite(colorHex){
+    var key = 'axolotl:'+colorHex;
+    if(spriteCache[key]) return spriteCache[key];
+    var canvas = renderAxolotlVector(colorHex);
+    return (spriteCache[key] = canvas);
+  }
   function getBossSprite(bodyColor, crownColor, eyeColor){
     var key = 'boss:'+bodyColor+':'+crownColor+':'+eyeColor;
     if(spriteCache[key]) return spriteCache[key];
@@ -1687,7 +1772,7 @@
     unlocked: ['starter'],
     equipped: 'starter',
     affection: {hae:0, bit:0, nun:0, sol:0, rae:0, suna:0, yumi:0},
-    best: {battle:0, rhythm:0, memory:0, brawl:0, catch:0, lantern:0, comet:0, whack:0, study:{math:0, grammar:0, reading:0}},
+    best: {battle:0, rhythm:0, memory:0, brawl:0, catch:0, lantern:0, comet:0, whack:0, snack:0, study:{math:0, grammar:0, reading:0}},
     soundOn: true,
     grade: 3,
     unlockedWeapons: ['glowstick'],
@@ -1706,7 +1791,8 @@
     boyOutfit: 'patrol',
     unlockedBoyOutfits: ['patrol'],
     boyPowerup: 'wick',
-    unlockedBoyPowerups: ['wick']
+    unlockedBoyPowerups: ['wick'],
+    pet: {color:'pink', unlockedColors:['pink'], hunger:70, happiness:70, lastFedAt:0}
   };
 
   var state = loadState();
@@ -1750,6 +1836,12 @@
       merged.unlockedBoyOutfits = merged.unlockedBoyOutfits || ['patrol'];
       merged.boyPowerup = merged.boyPowerup || 'wick';
       merged.unlockedBoyPowerups = merged.unlockedBoyPowerups || ['wick'];
+      merged.pet = merged.pet || {};
+      merged.pet.color = merged.pet.color || 'pink';
+      merged.pet.unlockedColors = merged.pet.unlockedColors || ['pink'];
+      merged.pet.hunger = typeof merged.pet.hunger === 'number' ? merged.pet.hunger : 70;
+      merged.pet.happiness = typeof merged.pet.happiness === 'number' ? merged.pet.happiness : 70;
+      merged.pet.lastFedAt = merged.pet.lastFedAt || 0;
       merged.affection = merged.affection || {};
       LANTERNBOYS.concat(HUNTERS).forEach(function(m){
         if(typeof merged.affection[m.id] !== 'number') merged.affection[m.id] = 0;
@@ -1968,6 +2060,16 @@
       bpm: 140, stepsPerBeat: 2,
       melody: [0,4,0,5, 0,4,0,6, 0,4,0,5, 4,2,0,null],
       bass:   [0,null,0,null, 0,null,0,null, 0,null,0,null, 0,null,0,null]
+    },
+    pets: {
+      bpm: 90, stepsPerBeat: 2,
+      melody: [4,null,6,null, 5,null,4,null, 2,null,4,null, 5,4,2,null],
+      bass:   [0,null,null,null, 0,null,null,null, 0,null,null,null, 0,null,null,null]
+    },
+    snack: {
+      bpm: 128, stepsPerBeat: 2,
+      melody: [2,4,5,4, 2,4,5,7, 5,4,2,4, 5,4,2,null],
+      bass:   [0,null,0,null, 0,null,0,null, 0,null,0,null, 0,null,0,null]
     }
   };
   var musicTimer = null, musicStep = 0, musicKind = null;
@@ -2051,8 +2153,9 @@
     else if(name==='battle') renderBattleHub();
     else if(name==='arcade') renderArcadeHub();
     else if(name==='study') renderStudyHub();
+    else if(name==='pets') renderPetsHub();
     refreshTopbar();
-    var screenMusic = {home:'home', clubhouse:'clubhouse', battle:'battle', arcade:'arcade', study:'study'};
+    var screenMusic = {home:'home', clubhouse:'clubhouse', battle:'battle', arcade:'arcade', study:'study', pets:'pets'};
     startMusic(screenMusic[name] || 'home');
   }
 
@@ -4191,6 +4294,263 @@
       clearInterval(countdownId);
       clearTimeout(spawnTimerId);
       holes.forEach(function(h){ clearTimeout(h.timeout); });
+    };
+  }
+
+  // ---------------- PETS ----------------
+  var PET_FEED_COOLDOWN = 45000;
+
+  function renderPetsHub(){
+    startMusic('pets');
+    var pet = state.pet;
+    var color = petColorById(pet.color);
+    var now = Date.now();
+    var canFeed = (now - pet.lastFedAt) >= PET_FEED_COOLDOWN;
+    var cooldownLeft = Math.max(1, Math.ceil((PET_FEED_COOLDOWN - (now - pet.lastFedAt))/1000));
+
+    var html =
+      '<div class="eyebrow">Pets</div>' +
+      '<h2 style="margin:2px 0 4px;">Meet '+PET_NAME+'</h2>' +
+      '<div class="closet-preview"><div class="avatar" style="--av:130px;"><img class="sprite-img" src="'+getAxolotlSprite(color.hex).toDataURL()+'" alt="'+PET_NAME+'"></div></div>' +
+      '<div class="card" style="margin-bottom:12px;">' +
+        '<div class="eyebrow" style="margin-bottom:2px;">Hunger</div>' +
+        '<div class="affection-bar"><div class="affection-fill" style="width:'+pet.hunger+'%"></div></div>' +
+        '<div class="eyebrow" style="margin:10px 0 2px;">Happiness</div>' +
+        '<div class="affection-bar"><div class="affection-fill" style="width:'+pet.happiness+'%"></div></div>' +
+        '<button class="btn btn-primary" id="feedPetBtn" style="margin-top:12px; width:100%;" '+(canFeed?'':'disabled')+'>'+(canFeed?'🍤 Feed '+PET_NAME:'Fed recently ('+cooldownLeft+'s)')+'</button>' +
+      '</div>' +
+      '<div class="eyebrow style-heading">Color</div><div class="swatch-grid">';
+    PET_COLORS.forEach(function(c){
+      var unlocked = pet.unlockedColors.indexOf(c.id) !== -1;
+      var equipped = pet.color === c.id;
+      html += '<div class="swatch '+(equipped?'equipped':'')+' '+(unlocked?'':'locked')+'" data-petcolor="'+c.id+'" tabindex="0">' +
+        '<div class="avatar" style="--av:54px;"><img class="sprite-img mini-av" src="'+getAxolotlSprite(c.hex).toDataURL()+'" alt="'+c.name+'"></div>' +
+        '<div class="name">'+c.name+'</div>' +
+        '<div class="cost">'+(unlocked ? (equipped?'Equipped':'Tap to dye') : '⭐ '+c.cost)+'</div>' +
+      '</div>';
+    });
+    html += '</div>' +
+      '<div class="card arcade-card" id="playSnackCard" style="margin-top:14px; cursor:pointer;">' +
+        '<div class="ico">🦐</div><h3>Snack Time</h3><p>Feed '+PET_NAME+' snacks as they float by.</p><div class="best">Best '+state.best.snack+'</div>' +
+      '</div>';
+
+    stageEl.innerHTML = html;
+
+    var feedBtn = document.getElementById('feedPetBtn');
+    if(feedBtn && canFeed) feedBtn.addEventListener('click', feedPet);
+    Array.prototype.forEach.call(stageEl.querySelectorAll('[data-petcolor]'), function(el){
+      el.addEventListener('click', function(){
+        var id = el.dataset.petcolor;
+        var c = petColorById(id);
+        var unlocked = pet.unlockedColors.indexOf(id) !== -1;
+        if(unlocked){
+          pet.color = id; saveState(); renderPetsHub();
+        } else if(state.starPoints >= c.cost){
+          state.starPoints -= c.cost;
+          pet.unlockedColors.push(id);
+          pet.color = id;
+          saveState(); refreshTopbar(); renderPetsHub();
+          showToast('Unlocked ' + c.name + '!');
+          beep(880,.15,'triangle');
+        } else {
+          showToast('Need ' + (c.cost - state.starPoints) + ' more Star Points');
+          beep(160,.12,'square');
+        }
+      });
+    });
+    document.getElementById('playSnackCard').addEventListener('click', renderSnackIntro);
+  }
+
+  function feedPet(){
+    var pet = state.pet;
+    pet.hunger = Math.min(100, pet.hunger + 15 + Math.floor(Math.random()*10));
+    pet.happiness = Math.min(100, pet.happiness + 8);
+    pet.lastFedAt = Date.now();
+    earnPoints(2);
+    saveState(); refreshTopbar();
+    showToast(PET_NAME + ' munches happily! +2 Star Points');
+    beep(660,.12,'sine');
+    renderPetsHub();
+  }
+
+  // ---------------- SNACK CATCH (pet mini-game) ----------------
+  var SNACK_TIME = 40;
+  function renderSnackIntro(){
+    stageEl.innerHTML =
+      '<div class="card" style="text-align:center;">' +
+        '<div class="eyebrow">Snack Time</div>' +
+        '<h2 style="margin:4px 0;">Feed '+PET_NAME+'!</h2>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Move left and right to catch shrimp and algae for '+PET_NAME+'. Dodge the murky rocks — those don\'t taste good!</p>' +
+        '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.snack+'</b></div>' +
+        '<button class="btn btn-primary" id="startSnack" style="margin-top:12px; width:100%;">Start Feeding</button>' +
+        '<button class="btn btn-ghost" id="backPets" style="margin-top:8px; width:100%;">Back</button>' +
+      '</div>';
+    document.getElementById('startSnack').addEventListener('click', runSnackCatch);
+    document.getElementById('backPets').addEventListener('click', renderPetsHub);
+  }
+
+  function runSnackCatch(){
+    startMusic('snack');
+    stageEl.innerHTML =
+      '<div class="battle-hud"><span>Score <b class="tabular" id="skScore">0</b></span><span id="skTime" class="tabular">'+SNACK_TIME+'s</span></div>' +
+      '<div class="battle-wrap"><canvas id="snackCanvas" width="400" height="480"></canvas></div>' +
+      '<div class="brawl-controls">' +
+        '<div class="brawl-btn" id="skLeft">◀</div>' +
+        '<div class="brawl-btn" id="skRight">▶</div>' +
+      '</div>';
+    var canvas = document.getElementById('snackCanvas');
+    var ctx = canvas.getContext('2d');
+    var scoreEl = document.getElementById('skScore');
+    var timeEl = document.getElementById('skTime');
+    var W = canvas.width, H = canvas.height;
+    var PET_Y = H - 46;
+    var petHex = petColorById(state.pet.color).hex;
+
+    var running = true, rafId = null, timerId = null;
+    var timeLeft = SNACK_TIME, score = 0, combo = 0;
+    var petX = W/2, keysDown = {left:false, right:false};
+    var items = [], lastSpawn = 0, flashTimer = 0;
+    var particles = [];
+    var stars = makeStarfield(30, W, PET_Y-20);
+    var SNACK_ICONS = ['🦐','🌿','🐟'];
+
+    function spawnItem(){
+      var isSnack = Math.random() < 0.72;
+      items.push({
+        x: 24 + Math.random()*(W-48),
+        y: -16,
+        r: isSnack ? 14 : 18,
+        type: isSnack ? 'snack' : 'rock',
+        icon: isSnack ? SNACK_ICONS[Math.floor(Math.random()*SNACK_ICONS.length)] : '🪨',
+        speed: 1.4 + Math.random()*1.2 + Math.min(1.6, (SNACK_TIME-timeLeft)/20)
+      });
+    }
+    function spawnParticles(x,y,color){
+      for(var i=0;i<8;i++){
+        var ang = Math.random()*Math.PI*2;
+        particles.push({x:x,y:y,vx:Math.cos(ang)*3,vy:Math.sin(ang)*3,life:18,color:color});
+      }
+    }
+    function drawPet(){
+      var sprite = getAxolotlSprite(petHex);
+      var w=64, h=48;
+      ctx.drawImage(sprite, petX-w/2, PET_Y-h, w, h);
+    }
+
+    function frame(ts){
+      if(!running) return;
+      ctx.fillStyle = flashTimer>0 ? 'rgba(255,95,162,.12)' : '#0F0A22';
+      ctx.fillRect(0,0,W,H);
+      drawStarfield(ctx, stars, ts);
+      if(flashTimer>0) flashTimer--;
+
+      if(keysDown.left) petX -= 4;
+      if(keysDown.right) petX += 4;
+      petX = Math.max(28, Math.min(W-28, petX));
+
+      if(ts - lastSpawn > Math.max(360, 780 - (SNACK_TIME-timeLeft)*10)){
+        spawnItem(); lastSpawn = ts;
+      }
+      ctx.font = '28px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for(var i=items.length-1;i>=0;i--){
+        var it = items[i];
+        it.y += it.speed;
+        ctx.fillText(it.icon, it.x, it.y);
+
+        var caught = Math.abs(it.x-petX) < 34 && it.y > PET_Y-28 && it.y < PET_Y-4;
+        if(caught){
+          if(it.type==='snack'){
+            combo++; score += 1 + Math.floor(combo/5);
+            spawnParticles(it.x, it.y, '#FFC15E');
+            beep(700+combo*6, .08, 'triangle');
+          } else {
+            combo = 0; score = Math.max(0, score-3); flashTimer = 14;
+            spawnParticles(it.x, it.y, '#8E7CFF');
+            beep(160,.16,'sawtooth');
+          }
+          scoreEl.textContent = score;
+          items.splice(i,1);
+          continue;
+        }
+        if(it.y - it.r > H){
+          if(it.type==='snack') combo = 0;
+          items.splice(i,1);
+        }
+      }
+      drawPet();
+      for(var p=particles.length-1;p>=0;p--){
+        var pt = particles[p];
+        pt.x+=pt.vx; pt.y+=pt.vy; pt.vy+=0.12; pt.life--;
+        ctx.globalAlpha = Math.max(0,pt.life/18);
+        ctx.fillStyle = pt.color;
+        ctx.beginPath(); ctx.arc(pt.x,pt.y,3,0,Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+        if(pt.life<=0) particles.splice(p,1);
+      }
+      rafId = requestAnimationFrame(frame);
+    }
+
+    function onKeyDown(e){
+      var k = e.key.toLowerCase();
+      if(k==='arrowleft'||k==='a') keysDown.left = true;
+      if(k==='arrowright'||k==='d') keysDown.right = true;
+    }
+    function onKeyUp(e){
+      var k = e.key.toLowerCase();
+      if(k==='arrowleft'||k==='a') keysDown.left = false;
+      if(k==='arrowright'||k==='d') keysDown.right = false;
+    }
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+
+    var btnLeft = document.getElementById('skLeft');
+    var btnRight = document.getElementById('skRight');
+    function holdStart(dir){ return function(ev){ ev.preventDefault(); keysDown[dir]=true; }; }
+    function holdEnd(dir){ return function(){ keysDown[dir]=false; }; }
+    btnLeft.addEventListener('pointerdown', holdStart('left'));
+    btnRight.addEventListener('pointerdown', holdStart('right'));
+    ['pointerup','pointerleave','pointercancel'].forEach(function(ev){
+      btnLeft.addEventListener(ev, holdEnd('left'));
+      btnRight.addEventListener(ev, holdEnd('right'));
+    });
+
+    timerId = setInterval(function(){
+      timeLeft--;
+      timeEl.textContent = timeLeft + 's';
+      if(timeLeft<=0) endSnack();
+    }, 1000);
+    rafId = requestAnimationFrame(frame);
+
+    function endSnack(){
+      running = false;
+      clearInterval(timerId);
+      cancelAnimationFrame(rafId);
+      var earned = Math.max(5, Math.round(score/2));
+      earnPoints(earned);
+      if(score > state.best.snack) state.best.snack = score;
+      state.pet.hunger = Math.min(100, state.pet.hunger + Math.floor(score/3));
+      state.pet.happiness = Math.min(100, state.pet.happiness + Math.floor(score/4));
+      saveState(); refreshTopbar();
+      playFanfare();
+      var wrap = stageEl.querySelector('.battle-wrap');
+      wrap.insertAdjacentHTML('beforeend',
+        '<div class="overlay-center">' +
+          '<h2 style="margin:0;">Snack Time Over!</h2>' +
+          '<p style="color:var(--dim); margin:0;">Score <b class="tabular" style="color:var(--cream);">'+score+'</b> · Earned <b class="tabular" style="color:var(--amber);">⭐'+earned+'</b></p>' +
+          '<button class="btn btn-primary" id="snackAgain">Feed Again</button>' +
+          '<button class="btn btn-ghost" id="snackDone">Back to '+PET_NAME+'</button>' +
+        '</div>'
+      );
+      document.getElementById('snackAgain').addEventListener('click', runSnackCatch);
+      document.getElementById('snackDone').addEventListener('click', renderPetsHub);
+    }
+
+    activeCleanup = function(){
+      running = false;
+      clearInterval(timerId);
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
     };
   }
 
