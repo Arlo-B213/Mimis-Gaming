@@ -1792,7 +1792,8 @@
     unlockedBoyOutfits: ['patrol'],
     boyPowerup: 'wick',
     unlockedBoyPowerups: ['wick'],
-    pet: {color:'pink', unlockedColors:['pink'], hunger:70, happiness:70, lastFedAt:0}
+    pet: {color:'pink', unlockedColors:['pink'], hunger:70, happiness:70, lastFedAt:0},
+    playAsPet: false
   };
 
   var state = loadState();
@@ -1900,6 +1901,7 @@
       getLanternSprite(member.id);
   }
   function playableSprite(){
+    if(state.playAsPet) return getAxolotlSprite(petColorById(state.pet.color).hex);
     var squad = state.squad || 'hunters';
     if(squad==='boys' && state.hunter){
       return getLanternSprite(state.hunter, boyOutfitById(state.boyOutfit).tunic, boyPowerupById(state.boyPowerup).glow);
@@ -3157,7 +3159,8 @@
 
     function drawPlayer(){
       var sprite = playableSprite();
-      var w = 64, h = 88;
+      var w = state.playAsPet ? 78 : 64;
+      var h = state.playAsPet ? 58 : 88;
       ctx.save();
       ctx.translate(player.x, GROUND_Y);
       if(player.facing<0) ctx.scale(-1,1);
@@ -3737,7 +3740,8 @@
     }
     function drawBasket(){
       var sprite = playableSprite();
-      var w=52, h=72;
+      var w = state.playAsPet ? 64 : 52;
+      var h = state.playAsPet ? 48 : 72;
       ctx.drawImage(sprite, basketX-w/2, BASKET_Y-h, w, h);
     }
 
@@ -4029,7 +4033,8 @@
     }
     function drawPlayer(){
       var sprite = playableSprite();
-      var w=54, h=74;
+      var w = state.playAsPet ? 66 : 54;
+      var h = state.playAsPet ? 50 : 74;
       ctx.save();
       if(flashTimer>0 && Math.floor(flashTimer/3)%2===0) ctx.globalAlpha = 0.35;
       ctx.drawImage(sprite, playerX-w/2, PLAYER_Y-h+10, w, h);
@@ -4319,6 +4324,10 @@
         '<div class="affection-bar"><div class="affection-fill" style="width:'+pet.happiness+'%"></div></div>' +
         '<button class="btn btn-primary" id="feedPetBtn" style="margin-top:12px; width:100%;" '+(canFeed?'':'disabled')+'>'+(canFeed?'🍤 Feed '+PET_NAME:'Fed recently ('+cooldownLeft+'s)')+'</button>' +
       '</div>' +
+      '<div class="card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">' +
+        '<div><div class="eyebrow" style="margin-bottom:2px;">Mini-Games</div><div style="font-weight:800;">'+(state.playAsPet ? 'Playing as '+PET_NAME : 'Playing as your hunter')+'</div></div>' +
+        '<button class="btn '+(state.playAsPet?'btn-primary':'btn-ghost')+'" id="togglePlayAsPetBtn">'+(state.playAsPet?'On':'Off')+'</button>' +
+      '</div>' +
       '<div class="eyebrow style-heading">Color</div><div class="swatch-grid">';
     PET_COLORS.forEach(function(c){
       var unlocked = pet.unlockedColors.indexOf(c.id) !== -1;
@@ -4338,6 +4347,13 @@
 
     var feedBtn = document.getElementById('feedPetBtn');
     if(feedBtn && canFeed) feedBtn.addEventListener('click', feedPet);
+    document.getElementById('togglePlayAsPetBtn').addEventListener('click', function(){
+      state.playAsPet = !state.playAsPet;
+      saveState();
+      showToast(state.playAsPet ? 'Now playing as ' + PET_NAME + ' in mini-games!' : 'Back to your hunter in mini-games.');
+      beep(state.playAsPet ? 880 : 500, .1, 'triangle');
+      renderPetsHub();
+    });
     Array.prototype.forEach.call(stageEl.querySelectorAll('[data-petcolor]'), function(el){
       el.addEventListener('click', function(){
         var id = el.dataset.petcolor;
