@@ -3006,13 +3006,13 @@
     { name:'Neon Arcade', tint:'#1C0A2E', lineTint:'rgba(255,150,220,.09)', bossName:'Nightmare Warden', bossColor:'#5C1F3A', crownColor:'#FF5FA2', eyeColor:'#8E7CFF' }
   ];
   var BRAWL_WAVES_PER_LEVEL = 2;
-  var BRAWL_HEARTS = 3;
+  var BRAWL_HEARTS = 4;
   var BRAWL_BOSS_BASE_HEALTH = 8;
   var BRAWL_SCROLL_DURATION = 40;
   var ENEMY_TYPES = {
-    imp:     { hp:1, speedMin:1.1, speedMax:1.7, r:24, scoreValue:2 },
-    brute:   { hp:2, speedMin:0.6, speedMax:0.8, r:34, scoreValue:5 },
-    charger: { hp:1, speedMin:0.9, speedMax:1.1, chargeSpeed:3.4, r:24, scoreValue:3 }
+    imp:     { hp:1, speedMin:0.8, speedMax:1.2, r:24, scoreValue:2 },
+    brute:   { hp:2, speedMin:0.45, speedMax:0.6, r:34, scoreValue:5 },
+    charger: { hp:1, speedMin:0.7, speedMax:0.9, chargeSpeed:2.5, r:24, scoreValue:3 }
   };
 
   function renderBrawlIntro(){
@@ -3020,7 +3020,7 @@
       '<div class="card" style="text-align:center;">' +
         '<div class="eyebrow">Alley Brawl</div>' +
         '<h2 style="margin:4px 0;">Fight your way through 3 levels</h2>' +
-        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Move left and right, punch the demons before they bump you. Watch for tough Brutes and fast Chargers. Clear each level\'s waves, beat its boss, and the alley scrolls on to the next one. You&#39;ve got 3 hearts.</p>' +
+        '<p style="color:var(--dim); font-size:13.5px; margin:0 0 4px;">Move left and right, punch the demons before they bump you. Watch for tough Brutes and fast Chargers. Clear each level\'s waves, beat its boss, and the alley scrolls on to the next one. You&#39;ve got 4 hearts, and your zap hits anything nearby — no need to face it just right.</p>' +
         '<div style="margin-top:12px; font-size:11px; color:var(--dim);">Best score: <b class="tabular" style="color:var(--amber);">'+state.best.brawl+'</b></div>' +
         '<button class="btn btn-primary" id="startBrawl" style="margin-top:12px; width:100%;">Start Brawl</button>' +
         '<button class="btn btn-ghost" id="backBattleHub2" style="margin-top:8px; width:100%;">Back</button>' +
@@ -3080,7 +3080,7 @@
     }
 
     function queueWave(n){
-      var count = 3 + n + level;
+      var count = 2 + n + Math.floor(level/2);
       spawnQueue = [];
       for(var i=0;i<count;i++){ spawnQueue.push({ side: Math.random()<0.5 ? 'left' : 'right', type: pickEnemyType() }); }
       updateWaveLabel();
@@ -3113,15 +3113,15 @@
     function triggerPunch(){
       if(punchCooldown>0 || ended) return;
       punchId++;
-      punchActive = 10;
-      punchCooldown = 20;
+      punchActive = 16;
+      punchCooldown = 12;
       beep(500, .08, 'triangle');
     }
 
     function hurtPlayer(fromX){
       if(player.invincible>0) return;
       hearts--; updateHearts();
-      player.invincible = 55;
+      player.invincible = 80;
       player.x += (player.x < fromX ? -26 : 26);
       player.x = Math.max(24, Math.min(W-24, player.x));
       beep(160, .16, 'sawtooth');
@@ -3169,10 +3169,12 @@
       ctx.restore();
       if(punchActive>0){
         ctx.save();
-        ctx.globalAlpha = punchActive/10*0.6;
+        ctx.globalAlpha = punchActive/16*0.55;
         ctx.fillStyle = '#FFC15E';
-        var px = player.x + player.facing*40;
-        ctx.beginPath(); ctx.arc(px, GROUND_Y-34, 16, 0, Math.PI*2); ctx.fill();
+        // the zap now hits either side, so show the glow ring around both
+        [-1, 1].forEach(function(dir){
+          ctx.beginPath(); ctx.arc(player.x + dir*44, GROUND_Y-34, 18, 0, Math.PI*2); ctx.fill();
+        });
         ctx.restore();
       }
     }
@@ -3265,7 +3267,7 @@
           wavePause--;
         } else if(spawnQueue.length){
           spawnTimer--;
-          if(spawnTimer<=0){ var next = spawnQueue.shift(); spawnEnemy(next.side, next.type); spawnTimer = 55; }
+          if(spawnTimer<=0){ var next = spawnQueue.shift(); spawnEnemy(next.side, next.type); spawnTimer = 80; }
         } else if(!enemies.length){
           afterWaveCleared();
         }
@@ -3280,7 +3282,7 @@
           var toPlayer = player.x - e.x;
           if(e.chargeState==='approach'){
             e.x += (toPlayer<0?-1:1) * e.speed;
-            if(Math.abs(toPlayer) < 130){ e.chargeState = 'winding'; e.chargeTimer = 22; }
+            if(Math.abs(toPlayer) < 130){ e.chargeState = 'winding'; e.chargeTimer = 36; }
           } else if(e.chargeState==='winding'){
             e.chargeTimer--;
             if(e.chargeTimer<=0) e.chargeState = 'charging';
@@ -3295,7 +3297,7 @@
         drawEnemy(e);
 
         var dx = e.x - player.x;
-        if(punchActive>0 && e.hitPunchId!==punchId && Math.sign(dx||1)===player.facing && Math.abs(dx)<46+punchRangeBonus){
+        if(punchActive>0 && e.hitPunchId!==punchId && Math.abs(dx)<62+punchRangeBonus){
           e.hitPunchId = punchId;
           e.hp--;
           spawnParticles(e.x, GROUND_Y-24, e.color);
@@ -3318,7 +3320,7 @@
         boss.age = (boss.age||0) + 1;
         boss.x += (player.x < boss.x ? -1 : 1) * 0.8;
         var bdx = boss.x - player.x;
-        if(punchActive>0 && Math.sign(bdx||1)===player.facing && Math.abs(bdx)<58+punchRangeBonus){
+        if(punchActive>0 && Math.abs(bdx)<74+punchRangeBonus){
           if(boss.lastHitId!==punchId){
             boss.lastHitId = punchId;
             boss.health--;
