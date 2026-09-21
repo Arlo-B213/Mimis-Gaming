@@ -5073,6 +5073,14 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     mesh.castShadow = true; mesh.receiveShadow = true;
     return mesh;
   }
+  // a rounded, pill-shaped body part (torso/limbs) — reads as an actual body instead of a lego block
+  function mkCapsule(radius,length,color){
+    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.5, metalness:0.05});
+    var mesh = new THREE.Mesh(new THREE.CapsuleGeometry(radius,length,6,12), mat);
+    mesh.position.y = radius + length/2;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    return mesh;
+  }
   function samplePixel(canvas, xf, yf, fallback){
     try{
       var ctx = canvas.getContext('2d');
@@ -5213,13 +5221,12 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     var boots = samplePixel(cv, 0.5, 0.95, 0x2B2B33);
     var faceTex = cropTexture(cv, 0.28, 0.13, 0.72, 0.31);
     var hairTex = cropTexture(cv, 0.12, 0.0, 0.88, 0.16);
-    var outfitTex = cropTexture(cv, 0.18, 0.42, 0.82, 0.78);
     var g = new THREE.Group();
-    var legL = mkBox(0.16,0.42,0.18, boots); legL.position.x = -0.13; g.add(legL);
-    var legR = mkBox(0.16,0.42,0.18, boots); legR.position.x = 0.13; g.add(legR);
-    var torso = mkFacedBox(0.42,0.5,0.24, outfit, outfitTex); torso.position.y += 0.42; g.add(torso);
-    var armL = mkBox(0.13,0.4,0.13, outfit); armL.position.set(-0.29, 0.42+0.06, 0); g.add(armL);
-    var armR = mkBox(0.13,0.4,0.13, outfit); armR.position.set(0.29, 0.42+0.06, 0); g.add(armR);
+    var legL = mkCapsule(0.085,0.25, boots); legL.position.x = -0.13; g.add(legL);
+    var legR = mkCapsule(0.085,0.25, boots); legR.position.x = 0.13; g.add(legR);
+    var torso = mkCapsule(0.19,0.12, outfit); torso.position.y += 0.42; g.add(torso);
+    var armL = mkCapsule(0.065,0.27, outfit); armL.position.set(-0.29, 0.42+0.06, 0); g.add(armL);
+    var armR = mkCapsule(0.065,0.27, outfit); armR.position.set(0.29, 0.42+0.06, 0); g.add(armR);
     var head = mkFacedBox(0.32,0.32,0.3, skin, faceTex); head.position.y += 0.42+0.5; g.add(head);
     var hairMesh = mkFacedBox(0.34,0.16,0.32, hair, hairTex); hairMesh.position.y = head.position.y + 0.16+0.08; g.add(hairMesh);
     g.userData.parts = {armL:armL, armR:armR, legL:legL, legR:legR};
