@@ -282,35 +282,39 @@
   .style-heading{ margin-top:16px; }
   .style-heading:first-of-type{ margin-top:4px; }
 
-  .room-wrap{ display:flex; flex-direction:column; gap:14px; }
+  .room-wrap{ display:flex; flex-direction:column; gap:12px; }
   .room-scene{
     position:relative; overflow:hidden; border:1px solid var(--line); border-radius:16px;
-    padding:14px 12px 26px;
-    background:linear-gradient(180deg, #241740 0%, #2E1B4A 46%, #1B1030 46%, #150C26 100%);
+    padding:0;
+    background:linear-gradient(180deg, #241740 0%, #2E1B4A 42%, #1B1030 42%, #150C26 100%);
   }
   .room-wall-deco{
-    position:absolute; top:16px; right:22px; font-size:26px; opacity:.55;
-    filter:drop-shadow(0 0 8px rgba(255,220,150,.35));
+    position:absolute; top:14px; right:20px; font-size:26px; opacity:.55;
+    filter:drop-shadow(0 0 8px rgba(255,220,150,.35)); pointer-events:none;
   }
-  .room-floor{ perspective:640px; perspective-origin:50% 0%; }
-  .room-grid{
-    display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
-    border-radius:10px; padding:10px 8px 22px; background:rgba(0,0,0,.18);
-    transform:rotateX(48deg) scale(1.06); transform-origin:50% 0%;
-    box-shadow:0 30px 40px -18px rgba(0,0,0,.6);
+  .room-floor{
+    position:relative; height:280px; touch-action:none;
+    background-image:
+      repeating-linear-gradient(rgba(255,255,255,.05) 0 1px, transparent 1px 34px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 14%);
+    background-position:0 42%; background-size:100% 58%; background-repeat:no-repeat;
   }
-  @media (prefers-reduced-motion: reduce){ .room-grid{ transform:none; } }
-  .room-cell{
-    aspect-ratio:1; border-radius:8px; border:1.5px dashed rgba(255,255,255,.18);
-    cursor:pointer; background:rgba(255,255,255,.03); position:relative;
+  .room-piece{
+    position:absolute; cursor:grab; user-select:none; touch-action:none;
+    display:flex; flex-direction:column; align-items:center;
   }
-  .room-cell.filled{ border-style:solid; border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.07); }
-  .room-cell .ico-wrap{
-    position:absolute; left:50%; bottom:50%; font-size:22px; line-height:1;
-    transform:translateX(-50%) rotateX(-48deg) translateY(6px) scale(1.35);
-    transform-origin:50% 100%;
-    filter:drop-shadow(0 6px 4px rgba(0,0,0,.5));
+  .room-piece:active{ cursor:grabbing; }
+  .piece-ico{ font-size:34px; line-height:1; filter:drop-shadow(0 8px 5px rgba(0,0,0,.55)); }
+  .piece-shadow{
+    width:70%; height:9px; border-radius:50%; margin-top:-4px;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,.55), transparent 70%);
   }
+  .room-piece.active .piece-ico{
+    filter:drop-shadow(0 8px 5px rgba(0,0,0,.55)) drop-shadow(0 0 0 3px var(--pink));
+  }
+  .room-piece.active{ z-index:999 !important; }
+  .room-toolbar{ display:flex; gap:8px; }
+  .room-toolbar .btn{ flex:1; font-size:12.5px; padding:9px 4px; }
   .room-palette{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .room-item{
     background:var(--panel-soft); border:1px solid var(--line); border-radius:12px;
@@ -1832,7 +1836,7 @@
     unlockedBoyPowerups: ['wick'],
     pet: {color:'pink', unlockedColors:['pink'], hunger:70, happiness:70, lastFedAt:0},
     playAsPet: false,
-    rooms: {hunters:{items:{}}, boys:{items:{}}}
+    rooms: {hunters:{items:[]}, boys:{items:[]}}
   };
 
   var state = loadState();
@@ -1888,10 +1892,10 @@
       });
       merged.squad = merged.squad || 'hunters';
       merged.rooms = merged.rooms || {};
-      merged.rooms.hunters = merged.rooms.hunters || {items:{}};
-      merged.rooms.hunters.items = merged.rooms.hunters.items || {};
-      merged.rooms.boys = merged.rooms.boys || {items:{}};
-      merged.rooms.boys.items = merged.rooms.boys.items || {};
+      merged.rooms.hunters = merged.rooms.hunters || {items:[]};
+      merged.rooms.hunters.items = merged.rooms.hunters.items || [];
+      merged.rooms.boys = merged.rooms.boys || {items:[]};
+      merged.rooms.boys.items = merged.rooms.boys.items || [];
       return merged;
     }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
   }
@@ -2409,63 +2413,158 @@
     {id:'window', name:'Window', icon:'🪟'},
     {id:'poster', name:'Poster', icon:'🖼️'}
   ];
-  var ROOM_CELLS = 15;
+  var ROOM_MIN_SCALE = 0.55, ROOM_MAX_SCALE = 2.0, ROOM_SCALE_STEP = 0.15;
   var roomSelected = null;
+  var roomActiveUid = null;
+  var roomDrag = null;
   function furnitureById(id){
     for(var i=0;i<FURNITURE.length;i++){ if(FURNITURE[i].id===id) return FURNITURE[i]; }
     return null;
   }
+  function roomClamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
   function currentRoom(){
     var key = state.squad==='boys' ? 'boys' : 'hunters';
-    state.rooms[key] = state.rooms[key] || {items:{}};
-    state.rooms[key].items = state.rooms[key].items || {};
-    return state.rooms[key];
+    var r = state.rooms[key] = state.rooms[key] || {items:[]};
+    if(!Array.isArray(r.items)){
+      var migrated = [];
+      var old = r.items || {};
+      for(var k in old){
+        var idx = parseInt(k,10);
+        var col = idx % 5, row = Math.floor(idx/5);
+        migrated.push({uid:'m'+idx+Math.random().toString(36).slice(2,6), itemId:old[k], x:12+col*19, y:24+row*30, scale:1});
+      }
+      r.items = migrated;
+    }
+    return r;
   }
+  function depthScaleFor(yPct){ return 0.6 + (yPct/100)*0.65; }
   function renderRoom(){
     var body = document.getElementById('clubBody');
     var room = currentRoom();
     var roomLabel = state.squad==='boys' ? "Lanternboys' Lookout" : "Hunters' Lookout";
-    var cellsHtml = '';
-    for(var i=0;i<ROOM_CELLS;i++){
-      var placed = room.items[i];
-      var f = placed ? furnitureById(placed) : null;
-      cellsHtml += '<div class="room-cell'+(f?' filled':'')+'" data-cell="'+i+'">'+(f?'<span class="ico-wrap">'+f.icon+'</span>':'')+'</div>';
-    }
+    var activeItem = null;
+    var piecesHtml = room.items.map(function(it){
+      var f = furnitureById(it.itemId);
+      if(!f) return '';
+      if(it.uid===roomActiveUid) activeItem = it;
+      var finalScale = depthScaleFor(it.y) * (it.scale||1);
+      var z = Math.round(it.y*10);
+      return '<div class="room-piece'+(it.uid===roomActiveUid?' active':'')+'" data-uid="'+it.uid+'" ' +
+        'style="left:'+it.x+'%; top:'+it.y+'%; z-index:'+z+'; transform:translate(-50%,-100%) scale('+finalScale.toFixed(2)+');">' +
+        '<span class="piece-ico">'+f.icon+'</span><span class="piece-shadow"></span>' +
+      '</div>';
+    }).join('');
     var paletteHtml = FURNITURE.map(function(f){
       return '<div class="room-item'+(roomSelected===f.id?' selected':'')+'" data-item="'+f.id+'">' +
         '<span class="ico">'+f.icon+'</span>' + f.name +
       '</div>';
     }).join('');
+    var hint = roomSelected ? 'Tap anywhere on the floor to place it.' :
+      (activeItem ? 'Drag it to reposition, or resize below.' : 'Pick a piece, then tap the floor. Tap a placed piece to drag or resize it.');
+    var toolbarHtml = activeItem ?
+      '<div class="room-toolbar">' +
+        '<button class="btn btn-ghost" id="roomSmaller">− Smaller</button>' +
+        '<button class="btn btn-ghost" id="roomBigger">+ Bigger</button>' +
+        '<button class="btn btn-ghost" id="roomRemoveItem">Remove</button>' +
+      '</div>' : '';
     body.innerHTML =
       '<div class="room-wrap">' +
         '<div><div class="eyebrow" style="margin-bottom:4px;">'+roomLabel+'</div>' +
-        '<p class="room-hint">Pick a piece below, then tap a spot to place it. Tap a filled spot to clear it.</p></div>' +
-        '<div class="room-scene"><span class="room-wall-deco">🌙</span><div class="room-floor"><div class="room-grid">'+cellsHtml+'</div></div></div>' +
+        '<p class="room-hint">'+hint+'</p></div>' +
+        '<div class="room-scene"><span class="room-wall-deco">🌙</span><div class="room-floor" id="roomFloor">'+piecesHtml+'</div></div>' +
+        toolbarHtml +
         '<div class="room-palette">'+paletteHtml+'</div>' +
         '<button class="btn btn-ghost" id="roomClearBtn">Clear Room</button>' +
       '</div>';
+
     Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(el){
       el.addEventListener('click', function(){
+        roomActiveUid = null;
         roomSelected = (roomSelected === this.dataset.item) ? null : this.dataset.item;
         renderRoom();
       });
     });
-    Array.prototype.forEach.call(body.querySelectorAll('.room-cell'), function(el){
-      el.addEventListener('click', function(){
-        var idx = this.dataset.cell;
-        var room = currentRoom();
-        if(roomSelected){
-          room.items[idx] = roomSelected;
-        } else if(room.items[idx]){
-          delete room.items[idx];
-        }
+
+    var floorEl = document.getElementById('roomFloor');
+    floorEl.addEventListener('click', function(e){
+      if(e.target.closest('.room-piece')) return;
+      var rect = floorEl.getBoundingClientRect();
+      var xPct = roomClamp(((e.clientX-rect.left)/rect.width)*100, 4, 96);
+      var yPct = roomClamp(((e.clientY-rect.top)/rect.height)*100, 8, 96);
+      if(roomSelected){
+        var uid = 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+        room.items.push({uid:uid, itemId:roomSelected, x:xPct, y:yPct, scale:1});
+        roomSelected = null;
+        roomActiveUid = uid;
         saveState();
         renderRoom();
+      } else if(roomActiveUid){
+        roomActiveUid = null;
+        renderRoom();
+      }
+    });
+
+    Array.prototype.forEach.call(floorEl.querySelectorAll('.room-piece'), function(el){
+      var uid = el.dataset.uid;
+      el.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        if(roomDrag && roomDrag.moved) return;
+        if(roomSelected) return;
+        roomActiveUid = (roomActiveUid===uid) ? null : uid;
+        renderRoom();
+      });
+      el.addEventListener('pointerdown', function(ev){
+        if(roomSelected) return;
+        roomActiveUid = uid;
+        roomDrag = {uid:uid, rect:floorEl.getBoundingClientRect(), moved:false};
+        el.setPointerCapture(ev.pointerId);
+      });
+      el.addEventListener('pointermove', function(ev){
+        if(!roomDrag || roomDrag.uid !== uid) return;
+        roomDrag.moved = true;
+        var rect = roomDrag.rect;
+        var xPct = roomClamp(((ev.clientX-rect.left)/rect.width)*100, 4, 96);
+        var yPct = roomClamp(((ev.clientY-rect.top)/rect.height)*100, 8, 96);
+        var item = room.items.filter(function(it){ return it.uid===uid; })[0];
+        if(!item) return;
+        item.x = xPct; item.y = yPct;
+        var finalScale = depthScaleFor(item.y) * (item.scale||1);
+        el.style.left = xPct+'%';
+        el.style.top = yPct+'%';
+        el.style.zIndex = Math.round(yPct*10);
+        el.style.transform = 'translate(-50%,-100%) scale('+finalScale.toFixed(2)+')';
+      });
+      el.addEventListener('pointerup', function(ev){
+        if(!roomDrag || roomDrag.uid !== uid) return;
+        var wasMoved = roomDrag.moved;
+        roomDrag = null;
+        if(wasMoved){ saveState(); renderRoom(); }
       });
     });
+
+    var smallerBtn = document.getElementById('roomSmaller');
+    var biggerBtn = document.getElementById('roomBigger');
+    var removeBtn = document.getElementById('roomRemoveItem');
+    if(smallerBtn) smallerBtn.addEventListener('click', function(){
+      if(!activeItem) return;
+      activeItem.scale = roomClamp((activeItem.scale||1) - ROOM_SCALE_STEP, ROOM_MIN_SCALE, ROOM_MAX_SCALE);
+      saveState(); renderRoom();
+    });
+    if(biggerBtn) biggerBtn.addEventListener('click', function(){
+      if(!activeItem) return;
+      activeItem.scale = roomClamp((activeItem.scale||1) + ROOM_SCALE_STEP, ROOM_MIN_SCALE, ROOM_MAX_SCALE);
+      saveState(); renderRoom();
+    });
+    if(removeBtn) removeBtn.addEventListener('click', function(){
+      room.items = room.items.filter(function(it){ return it.uid !== roomActiveUid; });
+      roomActiveUid = null;
+      saveState(); renderRoom();
+    });
+
     var clearBtn = document.getElementById('roomClearBtn');
     if(clearBtn) clearBtn.addEventListener('click', function(){
-      currentRoom().items = {};
+      currentRoom().items = [];
+      roomActiveUid = null; roomSelected = null;
       saveState();
       renderRoom();
     });
