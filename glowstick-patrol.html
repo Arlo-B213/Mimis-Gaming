@@ -5214,7 +5214,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
   }
 
   function buildHero(){
-    var cv = bridge().playableSprite();
+    var b = bridge();
+    var cv = b.playableSprite();
+    var isBoy = b.state.squad === 'boys';
     var hair = samplePixel(cv, 0.5, 0.05, 0x6B4A2E);
     var skin = samplePixel(cv, 0.5, 0.22, 0xE8B98A);
     var outfit = samplePixel(cv, 0.5, 0.55, 0x8A6BE0);
@@ -5222,14 +5224,60 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     var faceTex = cropTexture(cv, 0.28, 0.13, 0.72, 0.31);
     var hairTex = cropTexture(cv, 0.12, 0.0, 0.88, 0.16);
     var g = new THREE.Group();
-    var legL = mkCapsule(0.085,0.25, boots); legL.position.x = -0.13; g.add(legL);
-    var legR = mkCapsule(0.085,0.25, boots); legR.position.x = 0.13; g.add(legR);
-    var torso = mkCapsule(0.19,0.12, outfit); torso.position.y += 0.42; g.add(torso);
-    var armL = mkCapsule(0.065,0.27, outfit); armL.position.set(-0.29, 0.42+0.06, 0); g.add(armL);
-    var armR = mkCapsule(0.065,0.27, outfit); armR.position.set(0.29, 0.42+0.06, 0); g.add(armR);
-    var head = mkFacedBox(0.32,0.32,0.3, skin, faceTex); head.position.y += 0.42+0.5; g.add(head);
-    var hairMesh = mkFacedBox(0.34,0.16,0.32, hair, hairTex); hairMesh.position.y = head.position.y + 0.16+0.08; g.add(hairMesh);
-    g.userData.parts = {armL:armL, armR:armR, legL:legL, legR:legR};
+
+    // legs
+    var legLen = 0.25, legR = isBoy ? 0.095 : 0.08;
+    var legGap = isBoy ? 0.15 : 0.11;
+    var legL = mkCapsule(legR, legLen, boots); legL.position.x = -legGap; g.add(legL);
+    var legRt = mkCapsule(legR, legLen, boots); legRt.position.x = legGap; g.add(legRt);
+    var legTop = legR*2 + legLen;
+
+    // torso — boys get a broader build, girls get a slimmer waist with a flared skirt
+    var torsoR = isBoy ? 0.22 : 0.16;
+    var torsoLen = isBoy ? 0.15 : 0.09;
+    var torso = mkCapsule(torsoR, torsoLen, outfit); torso.position.y += legTop; g.add(torso);
+    var torsoH = torsoR*2 + torsoLen;
+
+    if(!isBoy){
+      var skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.27, 0.22, 16), new THREE.MeshStandardMaterial({color:outfit, roughness:0.55, metalness:0.05}));
+      skirt.position.y = legTop - 0.02;
+      skirt.castShadow = true; skirt.receiveShadow = true;
+      g.add(skirt);
+    }
+
+    // arms
+    var armLen = 0.24, armR = isBoy ? 0.078 : 0.06;
+    var shoulderX = isBoy ? 0.33 : 0.26;
+    var shoulderY = legTop + torsoH*0.78;
+    var armL = mkCapsule(armR, armLen, outfit); armL.position.set(-shoulderX, shoulderY, 0); g.add(armL);
+    var armRt = mkCapsule(armR, armLen, outfit); armRt.position.set(shoulderX, shoulderY, 0); g.add(armRt);
+
+    // head — a rounded sphere with the real face/hair art applied as decals, instead of a flat box
+    var headR = isBoy ? 0.19 : 0.175;
+    var headY = legTop + torsoH + headR*0.85;
+    var head = mkSphere(headR, skin); head.position.y = headY; g.add(head);
+
+    var faceDecal = new THREE.Mesh(
+      new THREE.PlaneGeometry(headR*1.55, headR*1.3),
+      new THREE.MeshStandardMaterial({map:faceTex, transparent:true, alphaTest:0.08, roughness:0.6})
+    );
+    faceDecal.position.set(0, headY - headR*0.05, headR*0.97);
+    g.add(faceDecal);
+
+    var hairCap = mkSphere(headR*1.08, hair);
+    hairCap.scale.set(1, 0.6, 1);
+    hairCap.position.set(0, headY + headR*0.4, 0);
+    g.add(hairCap);
+
+    var hairDecal = new THREE.Mesh(
+      new THREE.PlaneGeometry(headR*1.7, headR*1.0),
+      new THREE.MeshStandardMaterial({map:hairTex, transparent:true, alphaTest:0.08, roughness:0.7})
+    );
+    hairDecal.position.set(0, headY + headR*0.7, headR*0.55);
+    hairDecal.rotation.x = -0.5;
+    g.add(hairDecal);
+
+    g.userData.parts = {armL:armL, armR:armRt, legL:legL, legR:legRt};
     return g;
   }
 
