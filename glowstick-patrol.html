@@ -5116,6 +5116,19 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       return (d[0]<<16)|(d[1]<<8)|d[2];
     }catch(e){ return fallback; }
   }
+  function shade(hex, factor){
+    var c = new THREE.Color(hex);
+    c.multiplyScalar(factor);
+    return c.getHex();
+  }
+  // a texture patch curved to match a sphere's own surface (radius must match the sphere it sits on),
+  // so art follows the head's curvature instead of floating as a flat sticker.
+  // phiLen/thetaLen are the patch's angular width/height (radians); rotate the returned mesh to move it around the sphere.
+  function mkSpherePatch(radius, phiLen, thetaLen, tex){
+    var geo = new THREE.SphereGeometry(radius*1.008, 28, 20, Math.PI/2 - phiLen/2, phiLen, Math.PI/2 - thetaLen/2, thetaLen);
+    var mat = new THREE.MeshStandardMaterial({map:tex, transparent:true, alphaTest:0.08, roughness:0.65});
+    return new THREE.Mesh(geo, mat);
+  }
   // crops a rectangle (fractions of the source canvas) into its own canvas/texture,
   // so a piece of the game's existing pixel-art sprite can be pasted onto a box face
   function cropTexture(canvas, xf0, yf0, xf1, yf1){
@@ -5272,7 +5285,28 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       skirt.position.y = legTop - 0.02;
       skirt.castShadow = true; skirt.receiveShadow = true;
       g.add(skirt);
+      var hem = new THREE.Mesh(new THREE.TorusGeometry(0.268, 0.016, 8, 20), new THREE.MeshStandardMaterial({color:shade(outfit,0.72), roughness:0.6}));
+      hem.rotation.x = Math.PI/2;
+      hem.position.y = legTop - 0.13;
+      g.add(hem);
     }
+
+    // clothing details — belt, collar, and a small patrol badge on the chest
+    var beltY = legTop + 0.025;
+    var belt = new THREE.Mesh(new THREE.CylinderGeometry(torsoR*1.04, torsoR*1.04, 0.032, 18), new THREE.MeshStandardMaterial({color:shade(outfit,0.6), roughness:0.6}));
+    belt.position.y = beltY;
+    belt.castShadow = true;
+    g.add(belt);
+
+    var collar = new THREE.Mesh(new THREE.TorusGeometry(torsoR*0.6, 0.018, 8, 18), new THREE.MeshStandardMaterial({color: isBoy ? shade(outfit,0.7) : 0xF4EDE4, roughness:0.55}));
+    collar.rotation.x = Math.PI/2;
+    collar.position.y = legTop + torsoH*0.94;
+    g.add(collar);
+
+    var badge = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.014, 12), new THREE.MeshStandardMaterial({color:0xFFC15E, roughness:0.35, metalness:0.4, emissive:0xFFC15E, emissiveIntensity:0.18}));
+    badge.rotation.x = Math.PI/2;
+    badge.position.set(isBoy ? 0.1 : -0.085, legTop + torsoH*0.72, torsoR*0.92);
+    g.add(badge);
 
     // arms — upper arm + forearm + hand, jointed at the elbow, hanging from a shoulder pivot
     var upperArmR = isBoy ? 0.07 : 0.055, upperArmLen = isBoy ? 0.11 : 0.10;
@@ -5285,30 +5319,27 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     g.add(armLimbL.pivot); g.add(armLimbR.pivot);
     armLimbL.joint.rotation.x = 0.12; armLimbR.joint.rotation.x = 0.12;
 
-    // head — a rounded sphere with the real face/hair art applied as decals, instead of a flat box
+    // head — a rounded sphere with the real face/hair art curved onto its own surface, not a flat sticker
     var headR = isBoy ? 0.19 : 0.175;
     var headY = legTop + torsoH + headR*0.85;
     var head = mkSphere(headR, skin); head.position.y = headY; g.add(head);
 
-    var faceDecal = new THREE.Mesh(
-      new THREE.PlaneGeometry(headR*1.55, headR*1.3),
-      new THREE.MeshStandardMaterial({map:faceTex, transparent:true, alphaTest:0.08, roughness:0.6})
-    );
-    faceDecal.position.set(0, headY - headR*0.05, headR*0.97);
-    g.add(faceDecal);
+    // face patch: curved to the head's radius, centered on the front (a sphere patch's
+    // natural center is +Z, exactly where a face should be — no rotation needed)
+    var facePatch = mkSpherePatch(headR, 1.85, 1.45, faceTex);
+    head.add(facePatch);
 
-    var hairCap = mkSphere(headR*1.08, hair);
-    hairCap.scale.set(1, 0.6, 1);
-    hairCap.position.set(0, headY + headR*0.4, 0);
-    g.add(hairCap);
+    // hair cap: solid rounded volume for silhouette, sitting just above the head
+    var hairCap = mkSphere(headR*1.07, hair);
+    hairCap.scale.set(1, 0.58, 1);
+    hairCap.position.set(0, headR*0.42, -headR*0.04);
+    head.add(hairCap);
 
-    var hairDecal = new THREE.Mesh(
-      new THREE.PlaneGeometry(headR*1.7, headR*1.0),
-      new THREE.MeshStandardMaterial({map:hairTex, transparent:true, alphaTest:0.08, roughness:0.7})
-    );
-    hairDecal.position.set(0, headY + headR*0.7, headR*0.55);
-    hairDecal.rotation.x = -0.5;
-    g.add(hairDecal);
+    // hair patch: curved art wrapped over the crown/back (rotated up and back from the
+    // patch's default front-center position so it sits on top instead of over the face)
+    var hairPatch = mkSpherePatch(headR*1.03, 2.5, 1.9, hairTex);
+    hairPatch.rotation.x = -1.3;
+    head.add(hairPatch);
 
     g.userData.parts = {
       armL:armLimbL.pivot, armR:armLimbR.pivot, legL:legLimbL.pivot, legR:legLimbR.pivot,
