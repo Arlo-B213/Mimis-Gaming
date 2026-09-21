@@ -341,8 +341,8 @@
     filter:drop-shadow(0 8px 5px rgba(0,0,0,.55)) drop-shadow(0 0 0 3px var(--pink));
   }
   .room-piece.active{ z-index:999 !important; }
-  .room-toolbar{ display:flex; gap:8px; }
-  .room-toolbar .btn{ flex:1; font-size:12.5px; padding:9px 4px; }
+  .room-toolbar{ display:flex; gap:6px; flex-wrap:wrap; }
+  .room-toolbar .btn{ flex:1; min-width:0; font-size:11.5px; padding:9px 2px; }
   .paint-row{ display:flex; align-items:center; gap:8px; }
   .paint-row .paint-label{ font-size:11px; color:var(--dim); font-weight:700; width:38px; flex:none; }
   .paint-dot{
@@ -2536,8 +2536,10 @@
         '<p class="room-hint" id="roomHint">Drag to look around, scroll or pinch to zoom. Pick a piece below, then tap the floor.</p></div>' +
         '<div class="room-scene3d"><canvas id="room3dCanvas"></canvas><div class="room3d-loading" id="room3dLoading">Loading 3D room…</div></div>' +
         '<div class="room-toolbar" id="roomToolbar" style="display:none;">' +
+          '<button class="btn btn-ghost" id="roomRotateL">⟲</button>' +
           '<button class="btn btn-ghost" id="roomSmaller">− Smaller</button>' +
           '<button class="btn btn-ghost" id="roomBigger">+ Bigger</button>' +
+          '<button class="btn btn-ghost" id="roomRotateR">⟳</button>' +
           '<button class="btn btn-ghost" id="roomRemoveItem">Remove</button>' +
         '</div>' +
         '<div class="paint-row"><span class="paint-label">Walls</span>'+wallDotsHtml+'</div>' +
@@ -2592,9 +2594,13 @@
     var smallerBtn = document.getElementById('roomSmaller');
     var biggerBtn = document.getElementById('roomBigger');
     var removeBtn = document.getElementById('roomRemoveItem');
+    var rotateLBtn = document.getElementById('roomRotateL');
+    var rotateRBtn = document.getElementById('roomRotateR');
     if(smallerBtn) smallerBtn.addEventListener('click', function(){ if(window.Room3D) window.Room3D.resizeActive(ROOM_SCALE_STEP*-1); });
     if(biggerBtn) biggerBtn.addEventListener('click', function(){ if(window.Room3D) window.Room3D.resizeActive(ROOM_SCALE_STEP); });
     if(removeBtn) removeBtn.addEventListener('click', function(){ if(window.Room3D) window.Room3D.removeActive(); });
+    if(rotateLBtn) rotateLBtn.addEventListener('click', function(){ if(window.Room3D) window.Room3D.rotateActive(-Math.PI/4); });
+    if(rotateRBtn) rotateRBtn.addEventListener('click', function(){ if(window.Room3D) window.Room3D.rotateActive(Math.PI/4); });
 
     activeCleanup = function(){ if(window.Room3D) window.Room3D.unmount(); };
 
@@ -5181,6 +5187,12 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     var armR = mkBox(0.13,0.4,0.13, outfit); armR.position.set(0.29, 0.42+0.06, 0); g.add(armR);
     var head = mkBox(0.32,0.32,0.3, skin); head.position.y += 0.42+0.5; g.add(head);
     var hairMesh = mkBox(0.34,0.16,0.32, hair); hairMesh.position.y = head.position.y + 0.16+0.08; g.add(hairMesh);
+    var faceMat = new THREE.MeshStandardMaterial({color:0x2B2033});
+    var eyeGeo = new THREE.SphereGeometry(0.032, 8, 8);
+    var eyeL = new THREE.Mesh(eyeGeo, faceMat); eyeL.position.set(-0.08, head.position.y+0.02, 0.16); g.add(eyeL);
+    var eyeR = new THREE.Mesh(eyeGeo, faceMat); eyeR.position.set(0.08, head.position.y+0.02, 0.16); g.add(eyeR);
+    var mouth = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.02,0.02), new THREE.MeshStandardMaterial({color:0xB5654A}));
+    mouth.position.set(0, head.position.y-0.08, 0.16); g.add(mouth);
     g.userData.parts = {armL:armL, armR:armR, legL:legL, legR:legR};
     return g;
   }
@@ -5198,6 +5210,10 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       gill.rotation.z = p[0]<0 ? 0.7 : -0.7;
       g.add(gill);
     });
+    var eyeMat = new THREE.MeshStandardMaterial({color:0x241B3A});
+    var eyeGeo2 = new THREE.SphereGeometry(0.03, 8, 8);
+    var eL = new THREE.Mesh(eyeGeo2, eyeMat); eL.position.set(-0.07, 0.23, 0.37); g.add(eL);
+    var eR = new THREE.Mesh(eyeGeo2, eyeMat); eR.position.set(0.07, 0.23, 0.37); g.add(eR);
     g.userData.parts = {tail:tail};
     return g;
   }
@@ -5274,10 +5290,11 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       var w = pctToWorld(it.x, it.y);
       obj.position.set(w.x, 0, w.z);
       obj.scale.setScalar(it.scale||1);
+      obj.rotation.y = it.rotation||0;
       obj.userData.uid = it.uid;
       shadow.position.set(w.x, 0.01, w.z);
       scene.add(obj); scene.add(shadow);
-      pieces.push({uid:it.uid, itemId:it.itemId, obj:obj, shadow:shadow});
+      pieces.push({uid:it.uid, itemId:it.itemId, obj:obj, shadow:shadow, baseRotation:it.rotation||0});
     });
   }
 
@@ -5433,7 +5450,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     if(dist < 0.06){
       var pct = worldToPct(piece.obj.position.x, piece.obj.position.z);
       var item = findItem(walkTarget.uid);
-      if(item){ item.x = pct.x; item.y = pct.y; bridge().saveState(); }
+      piece.baseRotation = piece.obj.rotation.y;
+      if(item){ item.x = pct.x; item.y = pct.y; item.rotation = piece.baseRotation; bridge().saveState(); }
       walkTarget = null;
       return null;
     }
@@ -5481,7 +5499,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
           if(pparts) pparts.tail.rotation.y = Math.sin(t*8)*0.7;
         } else {
           p.obj.position.y = 0.04 + Math.sin(t*1.8 + i)*0.025;
-          p.obj.rotation.y = Math.sin(t*0.9 + i)*0.15;
+          p.obj.rotation.y = p.baseRotation + Math.sin(t*0.9 + i)*0.15;
           if(pparts) pparts.tail.rotation.y = Math.sin(t*3 + i)*0.5;
         }
       } else if(p.obj.userData.glow){
@@ -5570,6 +5588,19 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       bridge().saveState();
       setSelected(null);
       rebuildPieces();
+    },
+    rotateActive: function(delta){
+      if(!selectedUid) return;
+      var item = findItem(selectedUid);
+      var piece = findPiece(selectedUid);
+      if(!item || !piece) return;
+      var TWO_PI = Math.PI*2;
+      var next = ((item.rotation||0) + delta) % TWO_PI;
+      if(next < 0) next += TWO_PI;
+      item.rotation = next;
+      piece.baseRotation = next;
+      piece.obj.rotation.y = next;
+      bridge().saveState();
     },
     reload: function(){
       pendingItemId = null;
