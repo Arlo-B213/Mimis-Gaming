@@ -5053,21 +5053,24 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
   // ---- procedural low-poly 3D builders (boxes/cylinders/spheres — no external model files) ----
   function mkBox(w,h,d,color,emissive){
-    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.7, emissive:emissive||0x000000, emissiveIntensity:0.7});
+    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.6, metalness:0.05, emissive:emissive||0x000000, emissiveIntensity:0.7});
     var mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
     mesh.position.y = h/2;
+    mesh.castShadow = true; mesh.receiveShadow = true;
     return mesh;
   }
   function mkCyl(rTop,rBot,h,color){
-    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.7});
+    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.6, metalness:0.05});
     var mesh = new THREE.Mesh(new THREE.CylinderGeometry(rTop,rBot,h,16), mat);
     mesh.position.y = h/2;
+    mesh.castShadow = true; mesh.receiveShadow = true;
     return mesh;
   }
   function mkSphere(r,color){
-    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.6});
+    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.45, metalness:0.05});
     var mesh = new THREE.Mesh(new THREE.SphereGeometry(r,16,12), mat);
     mesh.position.y = r;
+    mesh.castShadow = true; mesh.receiveShadow = true;
     return mesh;
   }
   function samplePixel(canvas, xf, yf, fallback){
@@ -5092,19 +5095,21 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       tex.magFilter = THREE.NearestFilter;
       tex.minFilter = THREE.LinearFilter;
       tex.generateMipmaps = false;
+      tex.colorSpace = THREE.SRGBColorSpace;
       tex.needsUpdate = true;
       return tex;
     }catch(e){ return null; }
   }
   // a box whose front (+z) face shows a real texture crop, other faces stay a flat color
   function mkFacedBox(w,h,d,sideColor,frontTex){
-    var side = new THREE.MeshStandardMaterial({color:sideColor, roughness:0.8});
+    var side = new THREE.MeshStandardMaterial({color:sideColor, roughness:0.7});
     var front = frontTex ?
-      new THREE.MeshStandardMaterial({map:frontTex, roughness:0.8}) :
-      new THREE.MeshStandardMaterial({color:sideColor, roughness:0.8});
+      new THREE.MeshStandardMaterial({map:frontTex, roughness:0.7}) :
+      new THREE.MeshStandardMaterial({color:sideColor, roughness:0.7});
     var mats = [side, side, side, side, front, side]; // +x,-x,+y,-y,+z,-z
     var mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mats);
     mesh.position.y = h/2;
+    mesh.castShadow = true; mesh.receiveShadow = true;
     return mesh;
   }
 
@@ -5179,7 +5184,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       case 'lamp':
         add(mkCyl(0.18,0.2,0.05,0x2B2B33));
         add(mkCyl(0.03,0.03,0.9,0x555555), 0,0.05);
-        glow.push(add(new THREE.Mesh(new THREE.ConeGeometry(0.22,0.3,16), new THREE.MeshStandardMaterial({color:0xF4C95D, emissive:0xF4C95D, emissiveIntensity:0.9})), 0,0.95));
+        glow.push(add((function(){ var m=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.3,16), new THREE.MeshStandardMaterial({color:0xF4C95D, emissive:0xF4C95D, emissiveIntensity:0.9})); m.castShadow=true; return m; })(), 0,0.95));
         break;
       case 'rug':
         add(mkBox(1.3,0.03,0.9,0x8B5FBF));
@@ -5228,7 +5233,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     var g = new THREE.Group();
     var body = mkSphere(0.22, color); body.scale.set(1.3,0.8,1); g.add(body);
     var head = mkFacedBox(0.3,0.26,0.22, color, faceTex); head.position.set(0, 0.19, 0.24); g.add(head);
-    var tail = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.35,12), new THREE.MeshStandardMaterial({color:color}));
+    var tail = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.35,12), new THREE.MeshStandardMaterial({color:color, roughness:0.45}));
+    tail.castShadow = true; tail.receiveShadow = true;
     tail.rotation.z = Math.PI/2; tail.position.set(0, 0.16, -0.32); g.add(tail);
     g.userData.parts = {tail:tail};
     return g;
@@ -5241,7 +5247,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
   }
 
   function shadowForItem(it){
-    var mat = new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.35});
+    var mat = new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.16});
     var mesh = new THREE.Mesh(shadowGeo, mat);
     mesh.rotation.x = -Math.PI/2;
     mesh.position.y = 0.01;
@@ -5257,28 +5263,41 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
     updateCamera();
 
-    scene.add(new THREE.AmbientLight(0x9aa0ff, 0.55));
-    var moon = new THREE.DirectionalLight(0xfff2cf, 0.9);
+    scene.add(new THREE.AmbientLight(0x9aa0ff, 0.38));
+    var moon = new THREE.DirectionalLight(0xfff2cf, 1.15);
     moon.position.set(4, 6, 3);
+    moon.castShadow = true;
+    moon.shadow.mapSize.set(1024, 1024);
+    moon.shadow.camera.left = -ROOM_HALF_W-1;
+    moon.shadow.camera.right = ROOM_HALF_W+1;
+    moon.shadow.camera.top = ROOM_HALF_D+2;
+    moon.shadow.camera.bottom = -ROOM_HALF_D-1;
+    moon.shadow.camera.near = 1;
+    moon.shadow.camera.far = 18;
+    moon.shadow.bias = -0.0025;
+    moon.shadow.radius = 3;
     scene.add(moon);
-    var fill = new THREE.PointLight(0x6f5dd6, 0.5, 20);
+    var fill = new THREE.PointLight(0x6f5dd6, 0.4, 20);
     fill.position.set(-3, 3, -2);
     scene.add(fill);
 
     floorMat = new THREE.MeshStandardMaterial({color:0x1B1030, roughness:0.9, side:THREE.DoubleSide});
     var floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_HALF_W*2, ROOM_HALF_D*2), floorMat);
     floorMesh.rotation.x = -Math.PI/2;
+    floorMesh.receiveShadow = true;
     scene.add(floorMesh);
 
     wallBackMat = new THREE.MeshStandardMaterial({color:0x241740, roughness:1, side:THREE.DoubleSide});
     var wallBackMesh = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_HALF_W*2, ROOM_HEIGHT), wallBackMat);
     wallBackMesh.position.set(0, ROOM_HEIGHT/2, -ROOM_HALF_D);
+    wallBackMesh.receiveShadow = true;
     scene.add(wallBackMesh);
 
     wallSideMat = new THREE.MeshStandardMaterial({color:0x1c1436, roughness:1, side:THREE.DoubleSide});
     var wallSideMesh = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_HALF_D*2, ROOM_HEIGHT), wallSideMat);
     wallSideMesh.rotation.y = Math.PI/2;
     wallSideMesh.position.set(-ROOM_HALF_W, ROOM_HEIGHT/2, 0);
+    wallSideMesh.receiveShadow = true;
     scene.add(wallSideMesh);
 
     var moonMesh = new THREE.Mesh(new THREE.CircleGeometry(0.4, 32), new THREE.MeshBasicMaterial({color:0xFFE9B0}));
@@ -5590,6 +5609,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       callbacks = opts || {};
       renderer = new THREE.WebGLRenderer({canvas:canvasEl, antialias:true});
       renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
       buildScene();
       var room = bridge().currentRoom();
       this.setWallPaint(room.wallPaint);
