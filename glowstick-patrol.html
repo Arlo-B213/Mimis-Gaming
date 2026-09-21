@@ -283,6 +283,15 @@
   .style-heading:first-of-type{ margin-top:4px; }
 
   .room-wrap{ display:flex; flex-direction:column; gap:12px; }
+  .room-scene3d{
+    position:relative; border:1px solid var(--line); border-radius:16px; overflow:hidden;
+    background:#0B0716; height:320px;
+  }
+  .room-scene3d canvas{ width:100%; height:100%; display:block; touch-action:none; }
+  .room3d-loading{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    color:var(--dim); font-size:13px; text-align:center; padding:20px; pointer-events:none;
+  }
   .room-scene{
     position:relative; overflow:hidden; border:1px solid var(--line); border-radius:16px;
     padding:0; perspective:900px;
@@ -2423,6 +2432,7 @@
       btn.classList.toggle('active', btn.dataset.sub===sub);
       btn.addEventListener('click', function(){ renderClubhouse(btn.dataset.sub); });
     });
+    if(sub!=='room' && window.Room3D) window.Room3D.unmount();
     if(sub==='closet') renderCloset();
     else if(sub==='style') renderStyle();
     else if(sub==='weapons') renderWeapons();
@@ -2463,9 +2473,6 @@
     {id:'charcoal', name:'Charcoal', top:'#181A22', shade:'#121319'}
   ];
   var ROOM_MIN_SCALE = 0.55, ROOM_MAX_SCALE = 2.0, ROOM_SCALE_STEP = 0.15;
-  var roomSelected = null;
-  var roomActiveUid = null;
-  var roomDrag = null;
   function furnitureById(id){
     for(var i=0;i<FURNITURE.length;i++){ if(FURNITURE[i].id===id) return FURNITURE[i]; }
     return null;
@@ -2501,48 +2508,21 @@
     }
     return r;
   }
-  function depthScaleFor(yPct){ return 0.6 + (yPct/100)*0.65; }
-  function roomPieceVisual(it){
-    if(it.itemId==='hero') return {sprite: playableSprite().toDataURL()};
-    if(it.itemId==='pet') return {sprite: getAxolotlSprite(petColorById(state.pet.color).hex).toDataURL()};
-    var f = furnitureById(it.itemId);
-    return f ? {icon: f.icon} : null;
-  }
   function renderRoom(){
     var body = document.getElementById('clubBody');
     var room = currentRoom();
     var roomLabel = state.squad==='boys' ? "Lanternboys' Lookout" : "Hunters' Lookout";
-    var wp = wallPaintById(room.wallPaint), fp = floorPaintById(room.floorPaint);
-    var activeItem = null;
-    var piecesHtml = room.items.map(function(it){
-      var visual = roomPieceVisual(it);
-      if(!visual) return '';
-      if(it.uid===roomActiveUid) activeItem = it;
-      var finalScale = depthScaleFor(it.y) * (it.scale||1);
-      var z = Math.round(it.y*10);
-      var inner = visual.sprite ?
-        '<img class="piece-sprite" src="'+visual.sprite+'" alt="">' :
-        '<span class="piece-ico">'+visual.icon+'</span>';
-      return '<div class="room-piece'+(it.uid===roomActiveUid?' active':'')+'" data-uid="'+it.uid+'" ' +
-        'style="left:'+it.x+'%; top:'+it.y+'%; z-index:'+z+';">' +
-        '<div class="piece-inner" style="transform:translate(-50%,-100%) scale('+finalScale.toFixed(2)+');">' +
-          inner + '<span class="piece-shadow"></span>' +
-        '</div>' +
-      '</div>';
-    }).join('');
     var heroExists = room.items.some(function(it){ return it.itemId==='hero'; });
     var petExists = room.items.some(function(it){ return it.itemId==='pet'; });
     var charPaletteHtml =
-      '<div class="room-item char-item'+(roomSelected==='hero'?' selected':'')+'" data-item="hero">' +
+      '<div class="room-item char-item" data-item="hero">' +
         '<img class="ico-thumb" src="'+playableSprite().toDataURL()+'" alt="">'+(heroExists?'Move You':'You') +
       '</div>' +
-      '<div class="room-item char-item'+(roomSelected==='pet'?' selected':'')+'" data-item="pet">' +
+      '<div class="room-item char-item" data-item="pet">' +
         '<img class="ico-thumb" src="'+getAxolotlSprite(petColorById(state.pet.color).hex).toDataURL()+'" alt="">'+(petExists?'Move '+PET_NAME:PET_NAME) +
       '</div>';
     var paletteHtml = charPaletteHtml + FURNITURE.map(function(f){
-      return '<div class="room-item'+(roomSelected===f.id?' selected':'')+'" data-item="'+f.id+'">' +
-        '<span class="ico">'+f.icon+'</span>' + f.name +
-      '</div>';
+      return '<div class="room-item" data-item="'+f.id+'"><span class="ico">'+f.icon+'</span>'+f.name+'</div>';
     }).join('');
     var wallDotsHtml = WALL_PAINTS.map(function(w){
       return '<span class="paint-dot'+(room.wallPaint===w.id?' active':'')+'" data-wall="'+w.id+'" title="'+w.name+'" style="background:'+w.top+';"></span>';
@@ -2550,141 +2530,54 @@
     var floorDotsHtml = FLOOR_PAINTS.map(function(f){
       return '<span class="paint-dot'+(room.floorPaint===f.id?' active':'')+'" data-floor="'+f.id+'" title="'+f.name+'" style="background:'+f.top+';"></span>';
     }).join('');
-    var hint = roomSelected ? 'Tap anywhere on the floor to place it.' :
-      (activeItem ? 'Drag it to reposition, or resize below.' : 'Pick a piece or character, then tap the floor. Tap a placed piece to drag or resize it.');
-    var toolbarHtml = activeItem ?
-      '<div class="room-toolbar">' +
-        '<button class="btn btn-ghost" id="roomSmaller">− Smaller</button>' +
-        '<button class="btn btn-ghost" id="roomBigger">+ Bigger</button>' +
-        '<button class="btn btn-ghost" id="roomRemoveItem">Remove</button>' +
-      '</div>' : '';
     body.innerHTML =
       '<div class="room-wrap">' +
         '<div><div class="eyebrow" style="margin-bottom:4px;">'+roomLabel+'</div>' +
-        '<p class="room-hint">'+hint+'</p></div>' +
-        '<div class="room-scene" style="--wall-top:'+wp.top+'; --wall-shade:'+wp.shade+'; --floor-top:'+fp.top+'; --floor-shade:'+fp.shade+';">' +
-          '<span class="room-wall-deco">🌙</span><div class="room-floor" id="roomFloor">'+piecesHtml+'</div>' +
+        '<p class="room-hint" id="roomHint">Drag to look around, scroll or pinch to zoom. Pick a piece below, then tap the floor.</p></div>' +
+        '<div class="room-scene3d"><canvas id="room3dCanvas"></canvas><div class="room3d-loading" id="room3dLoading">Loading 3D room…</div></div>' +
+        '<div class="room-toolbar" id="roomToolbar" style="display:none;">' +
+          '<button class="btn btn-ghost" id="roomSmaller">− Smaller</button>' +
+          '<button class="btn btn-ghost" id="roomBigger">+ Bigger</button>' +
+          '<button class="btn btn-ghost" id="roomRemoveItem">Remove</button>' +
         '</div>' +
-        toolbarHtml +
         '<div class="paint-row"><span class="paint-label">Walls</span>'+wallDotsHtml+'</div>' +
         '<div class="paint-row"><span class="paint-label">Floor</span>'+floorDotsHtml+'</div>' +
-        '<div class="room-palette">'+paletteHtml+'</div>' +
+        '<div class="room-palette" id="roomPalette">'+paletteHtml+'</div>' +
         '<button class="btn btn-ghost" id="roomClearBtn">Clear Room</button>' +
       '</div>';
+
+    var hintEl = document.getElementById('roomHint');
+    var idleHint = 'Drag to look around, scroll or pinch to zoom. Pick a piece below, then tap the floor.';
 
     Array.prototype.forEach.call(body.querySelectorAll('.paint-dot[data-wall]'), function(el){
       el.addEventListener('click', function(){
         currentRoom().wallPaint = this.dataset.wall;
-        saveState(); renderRoom();
+        saveState();
+        Array.prototype.forEach.call(body.querySelectorAll('.paint-dot[data-wall]'), function(d){ d.classList.toggle('active', d===el); });
+        if(window.Room3D) window.Room3D.setWallPaint(el.dataset.wall);
       });
     });
     Array.prototype.forEach.call(body.querySelectorAll('.paint-dot[data-floor]'), function(el){
       el.addEventListener('click', function(){
         currentRoom().floorPaint = this.dataset.floor;
-        saveState(); renderRoom();
+        saveState();
+        Array.prototype.forEach.call(body.querySelectorAll('.paint-dot[data-floor]'), function(d){ d.classList.toggle('active', d===el); });
+        if(window.Room3D) window.Room3D.setFloorPaint(el.dataset.floor);
       });
     });
 
     Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(el){
       el.addEventListener('click', function(){
-        var itemId = this.dataset.item;
-        if((itemId==='hero' || itemId==='pet')){
-          var existing = room.items.filter(function(it){ return it.itemId===itemId; })[0];
-          if(existing){
-            roomActiveUid = existing.uid;
-            roomSelected = null;
-            renderRoom();
-            return;
-          }
+        if(!window.Room3D) return;
+        Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(d){ d.classList.remove('selected'); });
+        var armed = window.Room3D.togglePending(el.dataset.item);
+        if(armed){
+          el.classList.add('selected');
+          hintEl.textContent = 'Tap anywhere on the floor to place it.';
+        } else {
+          hintEl.textContent = idleHint;
         }
-        roomActiveUid = null;
-        roomSelected = (roomSelected === itemId) ? null : itemId;
-        renderRoom();
       });
-    });
-
-    var floorEl = document.getElementById('roomFloor');
-    floorEl.addEventListener('click', function(e){
-      if(e.target.closest('.room-piece')) return;
-      var rect = floorEl.getBoundingClientRect();
-      var xPct = roomClamp(((e.clientX-rect.left)/rect.width)*100, 4, 96);
-      var yPct = roomClamp(((e.clientY-rect.top)/rect.height)*100, 8, 96);
-      if(roomSelected){
-        var uid = 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-        room.items.push({uid:uid, itemId:roomSelected, x:xPct, y:yPct, scale:1});
-        roomSelected = null;
-        roomActiveUid = uid;
-        saveState();
-        renderRoom();
-      } else if(roomActiveUid){
-        roomActiveUid = null;
-        renderRoom();
-      }
-    });
-
-    Array.prototype.forEach.call(floorEl.querySelectorAll('.room-piece'), function(el){
-      var uid = el.dataset.uid;
-      el.addEventListener('click', function(ev){
-        ev.stopPropagation();
-        if(roomDrag && roomDrag.moved) return;
-        if(roomSelected) return;
-        if(roomActiveUid===uid){
-          var item = room.items.filter(function(it){ return it.uid===uid; })[0];
-          if(item && (item.itemId==='hero' || item.itemId==='pet')){
-            showToast(item.itemId==='hero' ? 'Just hanging out in the lookout.' : PET_NAME+' flops down for a nap.');
-            beep(520,.08,'sine');
-          }
-        }
-        roomActiveUid = (roomActiveUid===uid) ? null : uid;
-        renderRoom();
-      });
-      el.addEventListener('pointerdown', function(ev){
-        if(roomSelected) return;
-        roomActiveUid = uid;
-        roomDrag = {uid:uid, rect:floorEl.getBoundingClientRect(), moved:false};
-        el.setPointerCapture(ev.pointerId);
-      });
-      el.addEventListener('pointermove', function(ev){
-        if(!roomDrag || roomDrag.uid !== uid) return;
-        roomDrag.moved = true;
-        var rect = roomDrag.rect;
-        var xPct = roomClamp(((ev.clientX-rect.left)/rect.width)*100, 4, 96);
-        var yPct = roomClamp(((ev.clientY-rect.top)/rect.height)*100, 8, 96);
-        var item = room.items.filter(function(it){ return it.uid===uid; })[0];
-        if(!item) return;
-        item.x = xPct; item.y = yPct;
-        var finalScale = depthScaleFor(item.y) * (item.scale||1);
-        var inner = el.querySelector('.piece-inner');
-        el.style.left = xPct+'%';
-        el.style.top = yPct+'%';
-        el.style.zIndex = Math.round(yPct*10);
-        if(inner) inner.style.transform = 'translate(-50%,-100%) scale('+finalScale.toFixed(2)+')';
-      });
-      el.addEventListener('pointerup', function(ev){
-        if(!roomDrag || roomDrag.uid !== uid) return;
-        var wasMoved = roomDrag.moved;
-        roomDrag = null;
-        if(wasMoved){ saveState(); renderRoom(); }
-      });
-    });
-
-    var smallerBtn = document.getElementById('roomSmaller');
-    var biggerBtn = document.getElementById('roomBigger');
-    var removeBtn = document.getElementById('roomRemoveItem');
-    if(smallerBtn) smallerBtn.addEventListener('click', function(){
-      if(!activeItem) return;
-      activeItem.scale = roomClamp((activeItem.scale||1) - ROOM_SCALE_STEP, ROOM_MIN_SCALE, ROOM_MAX_SCALE);
-      saveState(); renderRoom();
-    });
-    if(biggerBtn) biggerBtn.addEventListener('click', function(){
-      if(!activeItem) return;
-      activeItem.scale = roomClamp((activeItem.scale||1) + ROOM_SCALE_STEP, ROOM_MIN_SCALE, ROOM_MAX_SCALE);
-      saveState(); renderRoom();
-    });
-    if(removeBtn) removeBtn.addEventListener('click', function(){
-      room.items = room.items.filter(function(it){ return it.uid !== roomActiveUid; });
-      roomActiveUid = null;
-      saveState(); renderRoom();
     });
 
     var clearBtn = document.getElementById('roomClearBtn');
@@ -2692,10 +2585,43 @@
       var r = currentRoom();
       r.items = [];
       r.seeded = false;
-      roomActiveUid = null; roomSelected = null;
       saveState();
-      renderRoom();
+      if(window.Room3D) window.Room3D.reload();
     });
+
+    var smallerBtn = document.getElementById('roomSmaller');
+    var biggerBtn = document.getElementById('roomBigger');
+    var removeBtn = document.getElementById('roomRemoveItem');
+    if(smallerBtn) smallerBtn.addEventListener('click', function(){ if(window.Room3D) window.Room3D.resizeActive(ROOM_SCALE_STEP*-1); });
+    if(biggerBtn) biggerBtn.addEventListener('click', function(){ if(window.Room3D) window.Room3D.resizeActive(ROOM_SCALE_STEP); });
+    if(removeBtn) removeBtn.addEventListener('click', function(){ if(window.Room3D) window.Room3D.removeActive(); });
+
+    activeCleanup = function(){ if(window.Room3D) window.Room3D.unmount(); };
+
+    var canvas = document.getElementById('room3dCanvas');
+    var tries = 0;
+    (function boot(){
+      if(window.Room3D){
+        var loading = document.getElementById('room3dLoading');
+        if(loading) loading.style.display = 'none';
+        window.Room3D.mount(canvas, {
+          onSelectionChange: function(hasItem){
+            var toolbar = document.getElementById('roomToolbar');
+            if(toolbar) toolbar.style.display = hasItem ? 'flex' : 'none';
+            if(hintEl) hintEl.textContent = hasItem ? 'Drag it to move, or resize below.' : idleHint;
+          },
+          onPlaced: function(){
+            Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(d){ d.classList.remove('selected'); });
+            if(hintEl) hintEl.textContent = 'Drag it to move, or resize below.';
+          }
+        });
+      } else if(tries++ < 150){
+        setTimeout(boot, 100);
+      } else {
+        var loading = document.getElementById('room3dLoading');
+        if(loading) loading.textContent = 'Could not load the 3D room (check your internet connection).';
+      }
+    })();
   }
 
   function renderWardrobePlaceholder(label){
@@ -5059,5 +4985,369 @@
       showToast('Cloud save loaded ☁️');
     }).catch(function(){ /* offline, blocked, or sign-in not enabled — keep local save */ });
   }
+
+  // Bridge for the 3D Room module (separate <script type="module"> below) —
+  // it can't reach into this IIFE's closure directly, so expose just what it needs.
+  window.__glowBridge = {
+    get state(){ return state; },
+    saveState: saveState,
+    currentRoom: currentRoom,
+    furnitureById: furnitureById,
+    FURNITURE: FURNITURE,
+    wallPaintById: wallPaintById,
+    floorPaintById: floorPaintById,
+    roomClamp: roomClamp,
+    playableSprite: playableSprite,
+    getAxolotlSprite: getAxolotlSprite,
+    petColorById: petColorById,
+    PET_NAME: PET_NAME,
+    showToast: showToast,
+    beep: beep,
+    ROOM_MIN_SCALE: ROOM_MIN_SCALE,
+    ROOM_MAX_SCALE: ROOM_MAX_SCALE,
+    ROOM_SCALE_STEP: ROOM_SCALE_STEP
+  };
+})();
+</script>
+
+<!-- ---------------- 3D ROOM (Three.js, loaded from CDN) ---------------- -->
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+
+(function(){
+  function bridge(){ return window.__glowBridge; }
+
+  var renderer=null, scene=null, camera=null, canvasEl=null, rafId=null, resizeObserver=null;
+  var floorMat=null, wallBackMat=null, wallSideMat=null;
+  var pieces = []; // {uid, itemId, obj, shadow}
+  var selectedUid = null;
+  var pendingItemId = null;
+  var callbacks = {};
+  var spherical = {radius:9, theta:0.5, phi:1.05};
+  var target = new THREE.Vector3(0,1,0);
+  var dragState = null;
+  var raycaster = new THREE.Raycaster();
+  var floorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+  var shadowGeo = new THREE.CircleGeometry(1, 24);
+  var ROOM_HALF_W = 4.6, ROOM_HALF_D = 2.7, ROOM_HEIGHT = 4.4, PLACE_MARGIN = 0.3, BASE_HEIGHT = 1.35;
+
+  function pctToWorld(xPct, yPct){
+    return { x: (xPct/100)*ROOM_HALF_W*2 - ROOM_HALF_W, z: (yPct/100)*ROOM_HALF_D*2 - ROOM_HALF_D };
+  }
+  function worldToPct(x, z){
+    var b = bridge();
+    return {
+      x: b.roomClamp(((x+ROOM_HALF_W)/(ROOM_HALF_W*2))*100, 2, 98),
+      y: b.roomClamp(((z+ROOM_HALF_D)/(ROOM_HALF_D*2))*100, 2, 98)
+    };
+  }
+
+  function emojiTexture(str){
+    var c = document.createElement('canvas'); c.width=c.height=128;
+    var ctx = c.getContext('2d');
+    ctx.font = '92px "Segoe UI Emoji","Apple Color Emoji",sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(str, 64, 74);
+    var tex = new THREE.CanvasTexture(c);
+    tex.needsUpdate = true;
+    return tex;
+  }
+
+  function spriteForItem(it){
+    var b = bridge();
+    var tex, aspect = 1;
+    if(it.itemId==='hero'){
+      var cv = b.playableSprite();
+      tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
+      aspect = cv.width/cv.height;
+    } else if(it.itemId==='pet'){
+      var cv2 = b.getAxolotlSprite(b.petColorById(b.state.pet.color).hex);
+      tex = new THREE.CanvasTexture(cv2); tex.needsUpdate = true;
+      aspect = cv2.width/cv2.height;
+    } else {
+      var f = b.furnitureById(it.itemId);
+      tex = emojiTexture(f ? f.icon : '❓');
+      aspect = 1;
+    }
+    var mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false});
+    var sprite = new THREE.Sprite(mat);
+    sprite.center.set(0.5, 0);
+    var h = BASE_HEIGHT * (it.scale||1);
+    sprite.scale.set(h*aspect, h, 1);
+    return sprite;
+  }
+
+  function shadowForItem(it){
+    var mat = new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.35});
+    var mesh = new THREE.Mesh(shadowGeo, mat);
+    mesh.rotation.x = -Math.PI/2;
+    mesh.position.y = 0.01;
+    var r = 0.3*(it.scale||1);
+    mesh.scale.set(r, r, 1);
+    return mesh;
+  }
+
+  function buildScene(){
+    scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x0B0716, 10, 20);
+
+    camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
+    updateCamera();
+
+    scene.add(new THREE.AmbientLight(0x9aa0ff, 0.55));
+    var moon = new THREE.DirectionalLight(0xfff2cf, 0.9);
+    moon.position.set(4, 6, 3);
+    scene.add(moon);
+    var fill = new THREE.PointLight(0x6f5dd6, 0.5, 20);
+    fill.position.set(-3, 3, -2);
+    scene.add(fill);
+
+    floorMat = new THREE.MeshStandardMaterial({color:0x1B1030, roughness:0.9, side:THREE.DoubleSide});
+    var floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_HALF_W*2, ROOM_HALF_D*2), floorMat);
+    floorMesh.rotation.x = -Math.PI/2;
+    scene.add(floorMesh);
+
+    wallBackMat = new THREE.MeshStandardMaterial({color:0x241740, roughness:1, side:THREE.DoubleSide});
+    var wallBackMesh = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_HALF_W*2, ROOM_HEIGHT), wallBackMat);
+    wallBackMesh.position.set(0, ROOM_HEIGHT/2, -ROOM_HALF_D);
+    scene.add(wallBackMesh);
+
+    wallSideMat = new THREE.MeshStandardMaterial({color:0x1c1436, roughness:1, side:THREE.DoubleSide});
+    var wallSideMesh = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_HALF_D*2, ROOM_HEIGHT), wallSideMat);
+    wallSideMesh.rotation.y = Math.PI/2;
+    wallSideMesh.position.set(-ROOM_HALF_W, ROOM_HEIGHT/2, 0);
+    scene.add(wallSideMesh);
+
+    var moonMesh = new THREE.Mesh(new THREE.CircleGeometry(0.4, 32), new THREE.MeshBasicMaterial({color:0xFFE9B0}));
+    moonMesh.position.set(ROOM_HALF_W-1, ROOM_HEIGHT-1, -ROOM_HALF_D+0.02);
+    scene.add(moonMesh);
+  }
+
+  function updateCamera(){
+    var p = spherical;
+    camera.position.set(
+      target.x + p.radius*Math.sin(p.phi)*Math.sin(p.theta),
+      target.y + p.radius*Math.cos(p.phi),
+      target.z + p.radius*Math.sin(p.phi)*Math.cos(p.theta)
+    );
+    camera.lookAt(target);
+  }
+
+  function rebuildPieces(){
+    pieces.forEach(function(p){ scene.remove(p.obj); scene.remove(p.shadow); });
+    pieces = [];
+    var room = bridge().currentRoom();
+    room.items.forEach(function(it){
+      var sprite = spriteForItem(it);
+      var shadow = shadowForItem(it);
+      var w = pctToWorld(it.x, it.y);
+      sprite.position.set(w.x, 0, w.z);
+      sprite.userData.uid = it.uid;
+      shadow.position.set(w.x, 0.01, w.z);
+      scene.add(sprite); scene.add(shadow);
+      pieces.push({uid:it.uid, itemId:it.itemId, obj:sprite, shadow:shadow});
+    });
+  }
+
+  function findPiece(uid){ for(var i=0;i<pieces.length;i++){ if(pieces[i].uid===uid) return pieces[i]; } return null; }
+  function findItem(uid){
+    var room = bridge().currentRoom();
+    for(var i=0;i<room.items.length;i++){ if(room.items[i].uid===uid) return room.items[i]; }
+    return null;
+  }
+
+  function setSelected(uid){
+    selectedUid = uid;
+    pieces.forEach(function(p){ p.obj.material.color.setHex(p.uid===uid ? 0xffc7e6 : 0xffffff); });
+    if(callbacks.onSelectionChange) callbacks.onSelectionChange(!!uid);
+  }
+
+  function pointerToNDC(ev, rect){
+    return new THREE.Vector2(((ev.clientX-rect.left)/rect.width)*2 - 1, -((ev.clientY-rect.top)/rect.height)*2 + 1);
+  }
+  function raycastSprites(ev, rect){
+    var ndc = pointerToNDC(ev, rect);
+    raycaster.setFromCamera(ndc, camera);
+    var hits = raycaster.intersectObjects(pieces.map(function(p){ return p.obj; }), false);
+    return hits.length ? findPiece(hits[0].object.userData.uid) : null;
+  }
+  function raycastFloor(ev, rect){
+    var ndc = pointerToNDC(ev, rect);
+    raycaster.setFromCamera(ndc, camera);
+    var pt = new THREE.Vector3();
+    return raycaster.ray.intersectPlane(floorPlane, pt) ? pt : null;
+  }
+
+  function onPointerDown(ev){
+    var rect = canvasEl.getBoundingClientRect();
+    if(pendingItemId){
+      var pt = raycastFloor(ev, rect);
+      if(pt) placeAt(pendingItemId, pt.x, pt.z);
+      return;
+    }
+    var hitPiece = raycastSprites(ev, rect);
+    if(hitPiece){
+      setSelected(hitPiece.uid);
+      dragState = {mode:'piece', uid:hitPiece.uid, moved:false};
+      canvasEl.setPointerCapture(ev.pointerId);
+    } else {
+      setSelected(null);
+      dragState = {mode:'orbit', startX:ev.clientX, startY:ev.clientY, theta0:spherical.theta, phi0:spherical.phi};
+      canvasEl.setPointerCapture(ev.pointerId);
+    }
+  }
+  function onPointerMove(ev){
+    if(!dragState) return;
+    var rect = canvasEl.getBoundingClientRect();
+    if(dragState.mode==='orbit'){
+      var dx = ev.clientX - dragState.startX, dy = ev.clientY - dragState.startY;
+      spherical.theta = dragState.theta0 - dx*0.008;
+      spherical.phi = bridge().roomClamp(dragState.phi0 - dy*0.008, 0.35, 1.4);
+      updateCamera();
+    } else if(dragState.mode==='piece'){
+      dragState.moved = true;
+      var pt = raycastFloor(ev, rect);
+      if(!pt) return;
+      var half = ROOM_HALF_W-PLACE_MARGIN, halfD = ROOM_HALF_D-PLACE_MARGIN;
+      var x = bridge().roomClamp(pt.x, -half, half);
+      var z = bridge().roomClamp(pt.z, -halfD, halfD);
+      var piece = findPiece(dragState.uid);
+      if(piece){ piece.obj.position.set(x, 0, z); piece.shadow.position.set(x, 0.01, z); }
+    }
+  }
+  function onPointerUp(){
+    if(dragState && dragState.mode==='piece' && dragState.moved){
+      var piece = findPiece(dragState.uid);
+      var item = findItem(dragState.uid);
+      if(piece && item){
+        var pct = worldToPct(piece.obj.position.x, piece.obj.position.z);
+        item.x = pct.x; item.y = pct.y;
+        bridge().saveState();
+      }
+    }
+    dragState = null;
+  }
+  function onWheel(ev){
+    ev.preventDefault();
+    spherical.radius = bridge().roomClamp(spherical.radius + ev.deltaY*0.01, 5, 15);
+    updateCamera();
+  }
+
+  function placeAt(itemId, x, z){
+    var b = bridge();
+    var half = ROOM_HALF_W-PLACE_MARGIN, halfD = ROOM_HALF_D-PLACE_MARGIN;
+    x = b.roomClamp(x, -half, half);
+    z = b.roomClamp(z, -halfD, halfD);
+    var room = b.currentRoom();
+    if(itemId==='hero' || itemId==='pet'){
+      room.items = room.items.filter(function(it){ return it.itemId !== itemId; });
+    }
+    var uid = 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    var pct = worldToPct(x, z);
+    room.items.push({uid:uid, itemId:itemId, x:pct.x, y:pct.y, scale:1});
+    b.saveState();
+    pendingItemId = null;
+    rebuildPieces();
+    setSelected(uid);
+    if(callbacks.onPlaced) callbacks.onPlaced();
+  }
+
+  function animate(){
+    rafId = requestAnimationFrame(animate);
+    var t = performance.now()/1000;
+    pieces.forEach(function(p, i){
+      if(p.itemId==='hero' || p.itemId==='pet'){
+        p.obj.position.y = 0.08 + Math.sin(t*1.6 + i)*0.04;
+      }
+    });
+    renderer.render(scene, camera);
+  }
+
+  function resize(){
+    if(!renderer || !canvasEl) return;
+    var w = canvasEl.clientWidth, h = canvasEl.clientHeight;
+    if(w<=0||h<=0) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w/h;
+    camera.updateProjectionMatrix();
+  }
+
+  window.Room3D = {
+    mount: function(canvas, opts){
+      this.unmount();
+      canvasEl = canvas;
+      callbacks = opts || {};
+      renderer = new THREE.WebGLRenderer({canvas:canvasEl, antialias:true});
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+      buildScene();
+      var room = bridge().currentRoom();
+      this.setWallPaint(room.wallPaint);
+      this.setFloorPaint(room.floorPaint);
+      rebuildPieces();
+      resize();
+      resizeObserver = new ResizeObserver(resize);
+      resizeObserver.observe(canvasEl);
+      canvasEl.addEventListener('pointerdown', onPointerDown);
+      canvasEl.addEventListener('pointermove', onPointerMove);
+      canvasEl.addEventListener('pointerup', onPointerUp);
+      canvasEl.addEventListener('pointercancel', onPointerUp);
+      canvasEl.addEventListener('wheel', onWheel, {passive:false});
+      animate();
+    },
+    unmount: function(){
+      if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+      if(resizeObserver){ resizeObserver.disconnect(); resizeObserver=null; }
+      if(canvasEl){
+        canvasEl.removeEventListener('pointerdown', onPointerDown);
+        canvasEl.removeEventListener('pointermove', onPointerMove);
+        canvasEl.removeEventListener('pointerup', onPointerUp);
+        canvasEl.removeEventListener('pointercancel', onPointerUp);
+        canvasEl.removeEventListener('wheel', onWheel);
+      }
+      if(renderer){ renderer.dispose(); renderer=null; }
+      scene=null; camera=null; canvasEl=null; pieces=[]; selectedUid=null; pendingItemId=null; dragState=null;
+    },
+    setWallPaint: function(id){
+      var p = bridge().wallPaintById(id);
+      if(wallBackMat) wallBackMat.color.set(p.top);
+      if(wallSideMat) wallSideMat.color.set(p.shade);
+    },
+    setFloorPaint: function(id){
+      var p = bridge().floorPaintById(id);
+      if(floorMat) floorMat.color.set(p.top);
+    },
+    togglePending: function(itemId){
+      pendingItemId = (pendingItemId===itemId) ? null : itemId;
+      if(pendingItemId) setSelected(null);
+      return !!pendingItemId;
+    },
+    resizeActive: function(delta){
+      if(!selectedUid) return;
+      var item = findItem(selectedUid);
+      var piece = findPiece(selectedUid);
+      if(!item || !piece) return;
+      var b = bridge();
+      item.scale = b.roomClamp((item.scale||1) + delta, b.ROOM_MIN_SCALE, b.ROOM_MAX_SCALE);
+      var aspect = piece.obj.scale.x / piece.obj.scale.y;
+      var h = BASE_HEIGHT * item.scale;
+      piece.obj.scale.set(h*aspect, h, 1);
+      var r = 0.3*item.scale;
+      piece.shadow.scale.set(r, r, 1);
+      b.saveState();
+    },
+    removeActive: function(){
+      if(!selectedUid) return;
+      var room = bridge().currentRoom();
+      room.items = room.items.filter(function(it){ return it.uid !== selectedUid; });
+      bridge().saveState();
+      setSelected(null);
+      rebuildPieces();
+    },
+    reload: function(){
+      pendingItemId = null;
+      setSelected(null);
+      rebuildPieces();
+    }
+  };
 })();
 </script>
