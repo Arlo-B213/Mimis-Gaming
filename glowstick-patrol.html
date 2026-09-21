@@ -282,6 +282,32 @@
   .style-heading{ margin-top:16px; }
   .style-heading:first-of-type{ margin-top:4px; }
 
+  .room-wrap{ display:flex; flex-direction:column; gap:14px; }
+  .room-scene{
+    background:linear-gradient(180deg, var(--panel-soft) 0%, var(--panel-soft-2) 100%);
+    border:1px solid var(--line); border-radius:16px; padding:10px;
+  }
+  .room-grid{
+    display:grid; grid-template-columns:repeat(5,1fr); gap:6px;
+    background:repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 1px, transparent 1px 20%);
+    border-radius:12px; padding:6px; background-color:rgba(0,0,0,.15);
+  }
+  .room-cell{
+    aspect-ratio:1; border-radius:10px; border:1.5px dashed rgba(255,255,255,.18);
+    display:flex; align-items:center; justify-content:center; font-size:22px;
+    cursor:pointer; background:rgba(255,255,255,.03); position:relative;
+  }
+  .room-cell.filled{ border-style:solid; border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.06); }
+  .room-cell.target{ border-color:var(--teal); box-shadow:0 0 0 2px rgba(82,232,198,.3) inset; }
+  .room-palette{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  .room-item{
+    background:var(--panel-soft); border:1px solid var(--line); border-radius:12px;
+    padding:8px 4px; text-align:center; cursor:pointer; color:var(--cream); font-size:11px;
+  }
+  .room-item .ico{ font-size:20px; display:block; margin-bottom:3px; }
+  .room-item.selected{ border-color:var(--pink); box-shadow:0 0 0 2px rgba(255,143,196,.3) inset; }
+  .room-hint{ font-size:12px; color:var(--dim); text-align:center; }
+
   .boy-list{ display:flex; flex-direction:column; gap:10px; }
   .boy-row{
     display:flex; align-items:center; gap:12px;
@@ -1793,7 +1819,8 @@
     boyPowerup: 'wick',
     unlockedBoyPowerups: ['wick'],
     pet: {color:'pink', unlockedColors:['pink'], hunger:70, happiness:70, lastFedAt:0},
-    playAsPet: false
+    playAsPet: false,
+    rooms: {hunters:{items:{}}, boys:{items:{}}}
   };
 
   var state = loadState();
@@ -1848,6 +1875,11 @@
         if(typeof merged.affection[m.id] !== 'number') merged.affection[m.id] = 0;
       });
       merged.squad = merged.squad || 'hunters';
+      merged.rooms = merged.rooms || {};
+      merged.rooms.hunters = merged.rooms.hunters || {items:{}};
+      merged.rooms.hunters.items = merged.rooms.hunters.items || {};
+      merged.rooms.boys = merged.rooms.boys || {items:{}};
+      merged.rooms.boys.items = merged.rooms.boys.items || {};
       return merged;
     }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
   }
@@ -2332,6 +2364,7 @@
         '<button class="subtab" data-sub="closet">Closet</button>' +
         '<button class="subtab" data-sub="style">Style</button>' +
         '<button class="subtab" data-sub="weapons">'+(state.squad==='boys'?'Power-Ups':'Weapons')+'</button>' +
+        '<button class="subtab" data-sub="room">Room</button>' +
         '<button class="subtab" data-sub="lounge">Lounge</button>' +
       '</div>' +
       '<div id="clubBody"></div>';
@@ -2342,7 +2375,88 @@
     if(sub==='closet') renderCloset();
     else if(sub==='style') renderStyle();
     else if(sub==='weapons') renderWeapons();
+    else if(sub==='room') renderRoom();
     else renderLounge();
+  }
+
+  // ---------------- HANGOUT ROOM ----------------
+  var FURNITURE = [
+    {id:'couch', name:'Couch', icon:'🛋️'},
+    {id:'chair', name:'Armchair', icon:'🪑'},
+    {id:'tv', name:'TV', icon:'📺'},
+    {id:'kitchen', name:'Kitchen', icon:'🍳'},
+    {id:'fridge', name:'Mini Fridge', icon:'🧊'},
+    {id:'closetitem', name:'Closet', icon:'🚪'},
+    {id:'bed', name:'Bunk Bed', icon:'🛏️'},
+    {id:'table', name:'Table', icon:'🪵'},
+    {id:'bookshelf', name:'Bookshelf', icon:'📚'},
+    {id:'arcade', name:'Arcade', icon:'🕹️'},
+    {id:'plant', name:'Plant', icon:'🪴'},
+    {id:'lamp', name:'Lamp', icon:'💡'},
+    {id:'rug', name:'Rug', icon:'🟪'},
+    {id:'window', name:'Window', icon:'🪟'},
+    {id:'poster', name:'Poster', icon:'🖼️'}
+  ];
+  var ROOM_CELLS = 15;
+  var roomSelected = null;
+  function furnitureById(id){
+    for(var i=0;i<FURNITURE.length;i++){ if(FURNITURE[i].id===id) return FURNITURE[i]; }
+    return null;
+  }
+  function currentRoom(){
+    var key = state.squad==='boys' ? 'boys' : 'hunters';
+    state.rooms[key] = state.rooms[key] || {items:{}};
+    state.rooms[key].items = state.rooms[key].items || {};
+    return state.rooms[key];
+  }
+  function renderRoom(){
+    var body = document.getElementById('clubBody');
+    var room = currentRoom();
+    var roomLabel = state.squad==='boys' ? "Lanternboys' Lookout" : "Hunters' Lookout";
+    var cellsHtml = '';
+    for(var i=0;i<ROOM_CELLS;i++){
+      var placed = room.items[i];
+      var f = placed ? furnitureById(placed) : null;
+      cellsHtml += '<div class="room-cell'+(f?' filled':'')+'" data-cell="'+i+'">'+(f?f.icon:'')+'</div>';
+    }
+    var paletteHtml = FURNITURE.map(function(f){
+      return '<div class="room-item'+(roomSelected===f.id?' selected':'')+'" data-item="'+f.id+'">' +
+        '<span class="ico">'+f.icon+'</span>' + f.name +
+      '</div>';
+    }).join('');
+    body.innerHTML =
+      '<div class="room-wrap">' +
+        '<div><div class="eyebrow" style="margin-bottom:4px;">'+roomLabel+'</div>' +
+        '<p class="room-hint">Pick a piece below, then tap a spot to place it. Tap a filled spot to clear it.</p></div>' +
+        '<div class="room-scene"><div class="room-grid">'+cellsHtml+'</div></div>' +
+        '<div class="room-palette">'+paletteHtml+'</div>' +
+        '<button class="btn btn-ghost" id="roomClearBtn">Clear Room</button>' +
+      '</div>';
+    Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(el){
+      el.addEventListener('click', function(){
+        roomSelected = (roomSelected === this.dataset.item) ? null : this.dataset.item;
+        renderRoom();
+      });
+    });
+    Array.prototype.forEach.call(body.querySelectorAll('.room-cell'), function(el){
+      el.addEventListener('click', function(){
+        var idx = this.dataset.cell;
+        var room = currentRoom();
+        if(roomSelected){
+          room.items[idx] = roomSelected;
+        } else if(room.items[idx]){
+          delete room.items[idx];
+        }
+        saveState();
+        renderRoom();
+      });
+    });
+    var clearBtn = document.getElementById('roomClearBtn');
+    if(clearBtn) clearBtn.addEventListener('click', function(){
+      currentRoom().items = {};
+      saveState();
+      renderRoom();
+    });
   }
 
   function renderWardrobePlaceholder(label){
