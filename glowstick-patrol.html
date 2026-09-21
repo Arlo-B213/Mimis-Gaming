@@ -2605,14 +2605,15 @@
         var loading = document.getElementById('room3dLoading');
         if(loading) loading.style.display = 'none';
         window.Room3D.mount(canvas, {
-          onSelectionChange: function(hasItem){
+          onSelectionChange: function(hasItem, itemId){
             var toolbar = document.getElementById('roomToolbar');
             if(toolbar) toolbar.style.display = hasItem ? 'flex' : 'none';
-            if(hintEl) hintEl.textContent = hasItem ? 'Drag it to move, or resize below.' : idleHint;
+            if(hintEl) hintEl.textContent = !hasItem ? idleHint :
+              (itemId==='hero' ? 'Tap the floor to walk there, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.');
           },
-          onPlaced: function(){
+          onPlaced: function(itemId){
             Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(d){ d.classList.remove('selected'); });
-            if(hintEl) hintEl.textContent = 'Drag it to move, or resize below.';
+            if(hintEl) hintEl.textContent = itemId==='hero' ? 'Tap the floor to walk there, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.';
           }
         });
       } else if(tries++ < 150){
@@ -5026,6 +5027,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
   var spherical = {radius:9, theta:0.5, phi:1.05};
   var target = new THREE.Vector3(0,1,0);
   var dragState = null;
+  var walkTarget = null; // {uid, x, z}
+  var lastFrameTime = null;
   var raycaster = new THREE.Raycaster();
   var floorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
   var shadowGeo = new THREE.CircleGeometry(1, 24);
@@ -5178,7 +5181,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     var armR = mkBox(0.13,0.4,0.13, outfit); armR.position.set(0.29, 0.42+0.06, 0); g.add(armR);
     var head = mkBox(0.32,0.32,0.3, skin); head.position.y += 0.42+0.5; g.add(head);
     var hairMesh = mkBox(0.34,0.16,0.32, hair); hairMesh.position.y = head.position.y + 0.16+0.08; g.add(hairMesh);
-    g.userData.parts = {armL:armL, armR:armR};
+    g.userData.parts = {armL:armL, armR:armR, legL:legL, legR:legR};
     return g;
   }
 
@@ -5298,7 +5301,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     if(selectedUid){ var prev = findPiece(selectedUid); if(prev) setHighlight(prev.obj, false); }
     selectedUid = uid;
     if(uid){ var cur = findPiece(uid); if(cur) setHighlight(cur.obj, true); }
-    if(callbacks.onSelectionChange) callbacks.onSelectionChange(!!uid);
+    var selItemId = uid ? (findPiece(uid)||{}).itemId : null;
+    if(callbacks.onSelectionChange) callbacks.onSelectionChange(!!uid, selItemId);
   }
 
   function pointerToNDC(ev, rect){
@@ -5333,14 +5337,31 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       dragState = {mode:'piece', uid:hitPiece.uid, moved:false};
       canvasEl.setPointerCapture(ev.pointerId);
     } else {
-      setSelected(null);
-      dragState = {mode:'orbit', startX:ev.clientX, startY:ev.clientY, theta0:spherical.theta, phi0:spherical.phi};
+      var selPiece = selectedUid ? findPiece(selectedUid) : null;
+      var floorPt = selPiece && selPiece.itemId==='hero' ? raycastFloor(ev, rect) : null;
+      if(selPiece && selPiece.itemId==='hero' && floorPt){
+        dragState = {mode:'walk-or-orbit', startX:ev.clientX, startY:ev.clientY, theta0:spherical.theta, phi0:spherical.phi, uid:selPiece.uid, targetX:floorPt.x, targetZ:floorPt.z, moved:false};
+      } else {
+        setSelected(null);
+        dragState = {mode:'orbit', startX:ev.clientX, startY:ev.clientY, theta0:spherical.theta, phi0:spherical.phi};
+      }
       canvasEl.setPointerCapture(ev.pointerId);
     }
   }
   function onPointerMove(ev){
     if(!dragState) return;
     var rect = canvasEl.getBoundingClientRect();
+    if(dragState.mode==='walk-or-orbit'){
+      var odx = ev.clientX - dragState.startX, ody = ev.clientY - dragState.startY;
+      if(Math.abs(odx)+Math.abs(ody) > 6){
+        dragState.moved = true;
+        dragState.mode = 'orbit';
+        spherical.theta = dragState.theta0 - odx*0.008;
+        spherical.phi = bridge().roomClamp(dragState.phi0 - ody*0.008, 0.35, 1.4);
+        updateCamera();
+      }
+      return;
+    }
     if(dragState.mode==='orbit'){
       var dx = ev.clientX - dragState.startX, dy = ev.clientY - dragState.startY;
       spherical.theta = dragState.theta0 - dx*0.008;
@@ -5366,6 +5387,13 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
         item.x = pct.x; item.y = pct.y;
         bridge().saveState();
       }
+    } else if(dragState && dragState.mode==='walk-or-orbit' && !dragState.moved){
+      var half = ROOM_HALF_W-PLACE_MARGIN, halfD = ROOM_HALF_D-PLACE_MARGIN;
+      walkTarget = {
+        uid: dragState.uid,
+        x: bridge().roomClamp(dragState.targetX, -half, half),
+        z: bridge().roomClamp(dragState.targetZ, -halfD, halfD)
+      };
     }
     dragState = null;
   }
@@ -5391,19 +5419,58 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     pendingItemId = null;
     rebuildPieces();
     setSelected(uid);
-    if(callbacks.onPlaced) callbacks.onPlaced();
+    if(callbacks.onPlaced) callbacks.onPlaced(itemId);
+  }
+
+  function stepWalk(dt){
+    if(!walkTarget) return null;
+    var piece = findPiece(walkTarget.uid);
+    if(!piece){ walkTarget = null; return null; }
+    var dx = walkTarget.x - piece.obj.position.x;
+    var dz = walkTarget.z - piece.obj.position.z;
+    var dist = Math.sqrt(dx*dx + dz*dz);
+    if(dist < 0.06){
+      var pct = worldToPct(piece.obj.position.x, piece.obj.position.z);
+      var item = findItem(walkTarget.uid);
+      if(item){ item.x = pct.x; item.y = pct.y; bridge().saveState(); }
+      walkTarget = null;
+      return null;
+    }
+    var speed = 2.0;
+    var step = Math.min(dist, speed*dt);
+    var nx = piece.obj.position.x + (dx/dist)*step;
+    var nz = piece.obj.position.z + (dz/dist)*step;
+    piece.obj.position.x = nx; piece.obj.position.z = nz;
+    piece.obj.rotation.y = Math.atan2(dx, dz);
+    piece.shadow.position.x = nx; piece.shadow.position.z = nz;
+    return piece.uid;
   }
 
   function animate(){
     rafId = requestAnimationFrame(animate);
-    var t = performance.now()/1000;
+    var now = performance.now();
+    var dt = lastFrameTime ? Math.min(0.05, (now-lastFrameTime)/1000) : 0.016;
+    lastFrameTime = now;
+    var t = now/1000;
+    var walkingUid = stepWalk(dt);
     pieces.forEach(function(p, i){
       if(p.itemId==='hero'){
-        p.obj.position.y = 0.06 + Math.sin(t*1.6 + i)*0.03;
         var parts = p.obj.userData.parts;
-        if(parts){
-          parts.armL.rotation.x = Math.sin(t*2 + i)*0.35;
-          parts.armR.rotation.x = -Math.sin(t*2 + i)*0.35;
+        var isWalking = walkingUid===p.uid;
+        if(isWalking && parts){
+          var freq = 9;
+          parts.legL.rotation.x = Math.sin(t*freq)*0.65;
+          parts.legR.rotation.x = -Math.sin(t*freq)*0.65;
+          parts.armL.rotation.x = -Math.sin(t*freq)*0.5;
+          parts.armR.rotation.x = Math.sin(t*freq)*0.5;
+          p.obj.position.y = 0.06 + Math.abs(Math.sin(t*freq))*0.035;
+        } else {
+          if(parts){ parts.legL.rotation.x = 0; parts.legR.rotation.x = 0; }
+          p.obj.position.y = 0.06 + Math.sin(t*1.6 + i)*0.03;
+          if(parts){
+            parts.armL.rotation.x = Math.sin(t*2 + i)*0.35;
+            parts.armR.rotation.x = -Math.sin(t*2 + i)*0.35;
+          }
         }
       } else if(p.itemId==='pet'){
         p.obj.position.y = 0.04 + Math.sin(t*1.8 + i)*0.025;
@@ -5461,6 +5528,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       }
       if(renderer){ renderer.dispose(); renderer=null; }
       scene=null; camera=null; canvasEl=null; pieces=[]; selectedUid=null; pendingItemId=null; dragState=null;
+      walkTarget=null; lastFrameTime=null;
     },
     setWallPaint: function(id){
       var p = bridge().wallPaintById(id);
