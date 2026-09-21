@@ -2615,11 +2615,11 @@
             var toolbar = document.getElementById('roomToolbar');
             if(toolbar) toolbar.style.display = hasItem ? 'flex' : 'none';
             if(hintEl) hintEl.textContent = !hasItem ? idleHint :
-              ((itemId==='hero'||itemId==='pet') ? 'Tap the floor to walk there, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.');
+              ((itemId==='hero'||itemId==='pet') ? 'Tap the floor to walk there, tap a couch or chair to sit, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.');
           },
           onPlaced: function(itemId){
             Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(d){ d.classList.remove('selected'); });
-            if(hintEl) hintEl.textContent = (itemId==='hero'||itemId==='pet') ? 'Tap the floor to walk there, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.';
+            if(hintEl) hintEl.textContent = (itemId==='hero'||itemId==='pet') ? 'Tap the floor to walk there, tap a couch or chair to sit, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.';
           }
         });
       } else if(tries++ < 150){
@@ -5294,7 +5294,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       obj.userData.uid = it.uid;
       shadow.position.set(w.x, 0.01, w.z);
       scene.add(obj); scene.add(shadow);
-      pieces.push({uid:it.uid, itemId:it.itemId, obj:obj, shadow:shadow, baseRotation:it.rotation||0});
+      pieces.push({uid:it.uid, itemId:it.itemId, obj:obj, shadow:shadow, baseRotation:it.rotation||0, sitting:false, sitY:0});
     });
   }
 
@@ -5341,6 +5341,12 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     return raycaster.ray.intersectPlane(floorPlane, pt) ? pt : null;
   }
 
+  function seatInfoFor(itemId){
+    if(itemId==='couch') return {height:0.45, offsets:[{x:-0.35,z:0.02},{x:0.35,z:0.02}]};
+    if(itemId==='chair') return {height:0.4, offsets:[{x:0,z:0.05}]};
+    return null;
+  }
+
   function onPointerDown(ev){
     var rect = canvasEl.getBoundingClientRect();
     if(pendingItemId){
@@ -5349,13 +5355,31 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       return;
     }
     var hitPiece = raycastSprites(ev, rect);
+    var selPiece = selectedUid ? findPiece(selectedUid) : null;
+    var canWalk = selPiece && (selPiece.itemId==='hero' || selPiece.itemId==='pet');
+    var seat = hitPiece ? seatInfoFor(hitPiece.itemId) : null;
+    if(hitPiece && canWalk && seat && hitPiece.uid !== selPiece.uid){
+      var seatIndex = Math.min(seat.offsets.length-1, selPiece.itemId==='pet' ? 1 : 0);
+      var off = seat.offsets[seatIndex];
+      var s = hitPiece.obj.scale.x;
+      var rot = hitPiece.obj.rotation.y;
+      var localOffset = new THREE.Vector3(off.x*s, 0, off.z*s);
+      localOffset.applyAxisAngle(new THREE.Vector3(0,1,0), rot);
+      selPiece.sitting = false;
+      walkTarget = {
+        uid: selPiece.uid,
+        x: hitPiece.obj.position.x + localOffset.x,
+        z: hitPiece.obj.position.z + localOffset.z,
+        sit: {y: seat.height*s, rot: rot}
+      };
+      canvasEl.setPointerCapture(ev.pointerId);
+      return;
+    }
     if(hitPiece){
       setSelected(hitPiece.uid);
       dragState = {mode:'piece', uid:hitPiece.uid, moved:false};
       canvasEl.setPointerCapture(ev.pointerId);
     } else {
-      var selPiece = selectedUid ? findPiece(selectedUid) : null;
-      var canWalk = selPiece && (selPiece.itemId==='hero' || selPiece.itemId==='pet');
       var floorPt = canWalk ? raycastFloor(ev, rect) : null;
       if(canWalk && floorPt){
         dragState = {mode:'walk-or-orbit', startX:ev.clientX, startY:ev.clientY, theta0:spherical.theta, phi0:spherical.phi, uid:selPiece.uid, targetX:floorPt.x, targetZ:floorPt.z, moved:false};
@@ -5393,7 +5417,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       var x = bridge().roomClamp(pt.x, -half, half);
       var z = bridge().roomClamp(pt.z, -halfD, halfD);
       var piece = findPiece(dragState.uid);
-      if(piece){ piece.obj.position.set(x, 0, z); piece.shadow.position.set(x, 0.01, z); }
+      if(piece){ piece.sitting = false; piece.obj.position.set(x, 0, z); piece.shadow.position.set(x, 0.01, z); }
     }
   }
   function onPointerUp(){
@@ -5407,6 +5431,8 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       }
     } else if(dragState && dragState.mode==='walk-or-orbit' && !dragState.moved){
       var half = ROOM_HALF_W-PLACE_MARGIN, halfD = ROOM_HALF_D-PLACE_MARGIN;
+      var walker = findPiece(dragState.uid);
+      if(walker) walker.sitting = false;
       walkTarget = {
         uid: dragState.uid,
         x: bridge().roomClamp(dragState.targetX, -half, half),
@@ -5450,6 +5476,11 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     if(dist < 0.06){
       var pct = worldToPct(piece.obj.position.x, piece.obj.position.z);
       var item = findItem(walkTarget.uid);
+      if(walkTarget.sit){
+        piece.sitting = true;
+        piece.sitY = walkTarget.sit.y;
+        piece.obj.rotation.y = walkTarget.sit.rot;
+      }
       piece.baseRotation = piece.obj.rotation.y;
       if(item){ item.x = pct.x; item.y = pct.y; item.rotation = piece.baseRotation; bridge().saveState(); }
       walkTarget = null;
@@ -5483,6 +5514,13 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
           parts.armL.rotation.x = -Math.sin(t*freq)*0.5;
           parts.armR.rotation.x = Math.sin(t*freq)*0.5;
           p.obj.position.y = 0.06 + Math.abs(Math.sin(t*freq))*0.035;
+        } else if(p.sitting){
+          p.obj.position.y = p.sitY + Math.sin(t*1.4 + i)*0.015;
+          if(parts){
+            parts.legL.rotation.x = -1.3; parts.legR.rotation.x = -1.3;
+            parts.armL.rotation.x = Math.sin(t*1.2 + i)*0.12;
+            parts.armR.rotation.x = -Math.sin(t*1.2 + i)*0.12;
+          }
         } else {
           if(parts){ parts.legL.rotation.x = 0; parts.legR.rotation.x = 0; }
           p.obj.position.y = 0.06 + Math.sin(t*1.6 + i)*0.03;
@@ -5497,6 +5535,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
         if(petWalking){
           p.obj.position.y = 0.04 + Math.abs(Math.sin(t*7))*0.05;
           if(pparts) pparts.tail.rotation.y = Math.sin(t*8)*0.7;
+        } else if(p.sitting){
+          p.obj.position.y = p.sitY + Math.sin(t*1.6 + i)*0.012;
+          if(pparts) pparts.tail.rotation.y = Math.sin(t*2.4 + i)*0.35;
         } else {
           p.obj.position.y = 0.04 + Math.sin(t*1.8 + i)*0.025;
           p.obj.rotation.y = p.baseRotation + Math.sin(t*0.9 + i)*0.15;
