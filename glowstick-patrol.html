@@ -285,7 +285,7 @@
   .room-wrap{ display:flex; flex-direction:column; gap:12px; }
   .room-scene3d{
     position:relative; border:1px solid var(--line); border-radius:16px; overflow:hidden;
-    background:#0B0716; height:320px;
+    background:#0B0716; height:380px;
   }
   .room-scene3d canvas{ width:100%; height:100%; display:block; touch-action:none; }
   .room3d-loading{
@@ -2521,7 +2521,13 @@
       '<div class="room-item char-item" data-item="pet">' +
         '<img class="ico-thumb" src="'+getAxolotlSprite(petColorById(state.pet.color).hex).toDataURL()+'" alt="">'+(petExists?'Move '+PET_NAME:PET_NAME) +
       '</div>';
-    var paletteHtml = charPaletteHtml + FURNITURE.map(function(f){
+    var castPaletteHtml = playableCastFor(state.squad).filter(function(m){ return m.id !== state.hunter; }).map(function(m){
+      var placed = room.items.some(function(it){ return it.itemId==='npc:'+m.id; });
+      return '<div class="room-item char-item" data-item="npc:'+m.id+'">' +
+        '<img class="ico-thumb" src="'+castMemberSpriteCanvas(m).toDataURL()+'" alt="">'+(placed?'Move '+m.name:m.name) +
+      '</div>';
+    }).join('');
+    var paletteHtml = charPaletteHtml + castPaletteHtml + FURNITURE.map(function(f){
       return '<div class="room-item" data-item="'+f.id+'"><span class="ico">'+f.icon+'</span>'+f.name+'</div>';
     }).join('');
     var wallDotsHtml = WALL_PAINTS.map(function(w){
@@ -2615,11 +2621,11 @@
             var toolbar = document.getElementById('roomToolbar');
             if(toolbar) toolbar.style.display = hasItem ? 'flex' : 'none';
             if(hintEl) hintEl.textContent = !hasItem ? idleHint :
-              ((itemId==='hero'||itemId==='pet') ? 'Tap the floor to walk there, tap a couch or chair to sit, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.');
+              ((itemId==='hero'||itemId==='pet'||(itemId&&itemId.indexOf('npc:')===0)) ? 'Tap the floor to walk there, tap a couch or chair to sit, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.');
           },
           onPlaced: function(itemId){
             Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(d){ d.classList.remove('selected'); });
-            if(hintEl) hintEl.textContent = (itemId==='hero'||itemId==='pet') ? 'Tap the floor to walk there, tap a couch or chair to sit, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.';
+            if(hintEl) hintEl.textContent = (itemId==='hero'||itemId==='pet'||(itemId&&itemId.indexOf('npc:')===0)) ? 'Tap the floor to walk there, tap a couch or chair to sit, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.';
           }
         });
       } else if(tries++ < 150){
@@ -5012,7 +5018,11 @@
     beep: beep,
     ROOM_MIN_SCALE: ROOM_MIN_SCALE,
     ROOM_MAX_SCALE: ROOM_MAX_SCALE,
-    ROOM_SCALE_STEP: ROOM_SCALE_STEP
+    ROOM_SCALE_STEP: ROOM_SCALE_STEP,
+    npcById: npcById,
+    castMemberSpriteCanvas: castMemberSpriteCanvas,
+    isHunter: isHunter,
+    playableCastFor: playableCastFor
   };
 })();
 </script>
@@ -5030,7 +5040,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
   var selectedUid = null;
   var pendingItemId = null;
   var callbacks = {};
-  var spherical = {radius:9, theta:0.5, phi:1.05};
+  var spherical = {radius:13, theta:0.5, phi:1.05};
   var target = new THREE.Vector3(0,1,0);
   var dragState = null;
   var walkTarget = null; // {uid, x, z}
@@ -5038,7 +5048,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
   var raycaster = new THREE.Raycaster();
   var floorPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
   var shadowGeo = new THREE.CircleGeometry(1, 24);
-  var ROOM_HALF_W = 4.6, ROOM_HALF_D = 2.7, ROOM_HEIGHT = 4.4, PLACE_MARGIN = 0.3, BASE_HEIGHT = 1.35;
+  var ROOM_HALF_W = 7.2, ROOM_HALF_D = 4.6, ROOM_HEIGHT = 5.4, PLACE_MARGIN = 0.35, BASE_HEIGHT = 1.35;
 
   function pctToWorld(xPct, yPct){
     return { x: (xPct/100)*ROOM_HALF_W*2 - ROOM_HALF_W, z: (yPct/100)*ROOM_HALF_D*2 - ROOM_HALF_D };
@@ -5172,77 +5182,119 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
         add(mkBox(1.5,0.4,0.15,0xC93F63), 0,0.45,-0.25);
         add(mkBox(0.15,0.55,0.65,0xC93F63), -0.68);
         add(mkBox(0.15,0.55,0.65,0xC93F63), 0.68);
+        add(mkCyl(0.05,0.05,0.1,0x4A2A34), -0.62,-0.45,0.22);
+        add(mkCyl(0.05,0.05,0.1,0x4A2A34), 0.62,-0.45,0.22);
+        add(mkCyl(0.05,0.05,0.1,0x4A2A34), -0.62,-0.45,-0.22);
+        add(mkCyl(0.05,0.05,0.1,0x4A2A34), 0.62,-0.45,-0.22);
+        [-0.38, 0.38].forEach(function(x){
+          var pillow = mkBox(0.32,0.24,0.16,0xFFC15E);
+          pillow.rotation.z = x<0 ? 0.18 : -0.18;
+          add(pillow, x, 0.45, -0.12);
+        });
         break;
       case 'chair':
         add(mkBox(0.55,0.4,0.55,0x8C6A4E));
         add(mkBox(0.55,0.5,0.12,0x74553A), 0,0.4,-0.2);
         add(mkBox(0.08,0.4,0.08,0x5A3E28), -0.22,0,0.22);
         add(mkBox(0.08,0.4,0.08,0x5A3E28), 0.22,0,0.22);
+        add(mkBox(0.5,0.06,0.5,0x9E7B54), 0,0.4);
         break;
       case 'tv':
-        add(mkBox(0.12,0.35,0.12,0x2B2B33));
-        add(mkBox(1.0,0.65,0.08,0x14161C), 0,0.35);
-        glow.push(add(mkBox(0.9,0.52,0.02,0x3AA1D8,0x2C7FA8), 0,0.35,0.03));
+        add(mkBox(0.9,0.45,0.32,0x3A2A1C));
+        add(mkBox(0.12,0.35,0.12,0x2B2B33), 0,0.45);
+        add(mkBox(1.0,0.65,0.08,0x14161C), 0,0.8);
+        glow.push(add(mkBox(0.9,0.52,0.02,0x3AA1D8,0x2C7FA8), 0,0.8,0.03));
+        add(mkBox(0.7,0.06,0.06,0x1B1B22), 0,0.48,0.16);
         break;
       case 'kitchen':
         add(mkBox(1.3,0.85,0.6,0xB8C4CC));
+        add(mkBox(1.32,0.05,0.62,0x8A97A0), 0,0.85);
         add(mkCyl(0.08,0.08,0.05,0x2B2B33), -0.35,0.85,0.15);
         add(mkCyl(0.08,0.08,0.05,0x2B2B33), 0.05,0.85,0.15);
+        add(mkBox(0.5,0.35,0.03,0x8A97A0), -0.35,0.2,0.315);
+        add(mkCyl(0.015,0.015,0.1,0x2B2B33), -0.15,0.35,0.34).rotation.z = Math.PI/2;
+        add(mkBox(0.5,0.35,0.03,0x8A97A0), 0.32,0.2,0.315);
+        add(mkCyl(0.015,0.015,0.1,0x2B2B33), 0.12,0.35,0.34).rotation.z = Math.PI/2;
         break;
       case 'fridge':
         add(mkBox(0.7,1.7,0.65,0xE7EEF2));
         add(mkBox(0.03,1.4,0.05,0xAFC0C9), -0.3,0,0.33);
+        add(mkBox(0.66,0.03,0.62,0xC9D6DC), 0,1.05,0);
+        add(mkCyl(0.02,0.02,0.12,0x8A97A0), -0.28,0.55,0.32).rotation.z = Math.PI/2;
         break;
       case 'closetitem':
         add(mkBox(0.9,1.9,0.55,0x7A5230));
         add(mkBox(0.03,1.7,0.03,0x4E3620), -0.02,0,0.29);
+        add(mkBox(0.02,1.86,0.02,0x5A3E28), 0,0,0.29);
         add(mkSphere(0.03,0xC9A24B), -0.15,0.9,0.29);
         add(mkSphere(0.03,0xC9A24B), 0.15,0.9,0.29);
         break;
       case 'bed':
         add(mkBox(1.6,0.3,0.9,0x6B4A2E));
         add(mkBox(1.5,0.2,0.8,0xF3E3E8), 0,0.3);
+        add(mkBox(1.5,0.05,0.8,0xE05175), 0,0.42,0.2);
         add(mkBox(0.4,0.15,0.7,0xFFFFFF), -0.5,0.5);
+        add(mkBox(0.34,0.1,0.62,0xF3E3E8), -0.5,0.58);
         add(mkBox(1.6,0.55,0.1,0x6B4A2E), 0,0.3,-0.4);
+        add(mkBox(1.5,0.4,0.03,0xF3E3E8), 0,0.55,-0.35);
         break;
       case 'table':
         add(mkBox(1.2,0.08,0.7,0x8C6A4E));
         [[-0.5,-0.28],[0.5,-0.28],[-0.5,0.28],[0.5,0.28]].forEach(function(p){
           add(mkBox(0.08,0.5,0.08,0x6B4A2E), p[0],0,p[1]);
         });
+        add(mkCyl(0.09,0.11,0.14,0xB05C3A), 0,0.08);
+        add(mkSphere(0.14,0x3E8E5B), 0,0.2);
         break;
       case 'bookshelf':
         add(mkBox(0.9,1.7,0.35,0x6B4A2E));
-        [0.4,0.8,1.2].forEach(function(y){ add(mkBox(0.82,0.04,0.32,0x4E3620), 0,y); });
+        [0.05,0.4,0.8,1.2,1.6].forEach(function(y){ add(mkBox(0.82,0.04,0.32,0x4E3620), 0,y); });
         [0xE05175,0x52E8C6,0xFFC15E,0x8A6BE0].forEach(function(c,i){
           add(mkBox(0.12,0.3,0.28,c), -0.32+i*0.22, 0.44);
         });
+        [0x8A6BE0,0xFFC15E,0xE05175].forEach(function(c,i){
+          add(mkBox(0.1,0.34,0.26,c), -0.24+i*0.24, 0.84);
+        });
+        add(mkSphere(0.13,0x3E8E5B), -0.28,1.6);
+        add(mkBox(0.14,0.18,0.14,0xC9A24B), 0.22,1.6);
         break;
       case 'arcade':
         add(mkBox(0.7,1.5,0.65,0x241B3A));
         glow.push(add(mkBox(0.5,0.5,0.05,0x52E8C6,0x2FA894), 0,1.0,0.33));
         glow.push(add(mkBox(0.7,0.2,0.05,0xFF8FC4,0xB2568C), 0,1.5,0.33));
+        add(mkCyl(0.05,0.05,0.04,0x14161C), -0.12,0.55,0.34);
+        add(mkSphere(0.035,0xFF5F7A), -0.12,0.62,0.34);
+        [-0.02,0.08,0.18].forEach(function(x){ add(mkCyl(0.025,0.025,0.05,0x8A97A0), x,0.55,0.34); });
         break;
       case 'plant':
         add(mkCyl(0.22,0.28,0.35,0xB05C3A));
+        add(mkCyl(0.24,0.24,0.03,0x8A4A2E), 0,0.35);
         add(mkSphere(0.35,0x3E8E5B), 0,0.55);
+        add(mkSphere(0.2,0x4EA36B), -0.2,0.75,0.1);
+        add(mkSphere(0.18,0x4EA36B), 0.22,0.7,-0.1);
         break;
       case 'lamp':
         add(mkCyl(0.18,0.2,0.05,0x2B2B33));
         add(mkCyl(0.03,0.03,0.9,0x555555), 0,0.05);
         glow.push(add((function(){ var m=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.3,16), new THREE.MeshStandardMaterial({color:0xF4C95D, emissive:0xF4C95D, emissiveIntensity:0.9})); m.castShadow=true; return m; })(), 0,0.95));
+        add(mkSphere(0.04,0xFFE9B0), 0,0.85);
         break;
       case 'rug':
         add(mkBox(1.3,0.03,0.9,0x8B5FBF));
+        add(mkBox(1.08,0.032,0.68,0x6B4A9E));
+        add(mkBox(0.82,0.034,0.44,0x8B5FBF));
         break;
       case 'window':
         add(mkBox(0.9,1.1,0.06,0x5A4A78));
-        add(mkBox(0.75,0.95,0.03,0x8FD3F4), 0,0.08,0.02);
+        add(mkBox(0.75,0.95,0.03,0x8FD3F4,0x2A5468), 0,0.08,0.02);
         add(mkBox(0.03,0.95,0.04,0x5A4A78), 0,0.08,0.04);
+        add(mkBox(0.75,0.03,0.04,0x5A4A78), 0,0.08,0.04);
+        add(mkBox(0.98,0.06,0.08,0x4A3A68), 0,-0.5);
         break;
       case 'poster':
-        add(mkBox(0.65,0.85,0.05,0xE3A6C4));
-        add(mkBox(0.55,0.7,0.02,0xFFFFFF), 0,0.07,0.03);
+        add(mkBox(0.65,0.85,0.05,0x3A2E22));
+        add(mkBox(0.57,0.77,0.02,0xE3A6C4), 0,0.07,0.03);
+        add(mkBox(0.49,0.6,0.015,0xFFFFFF), 0,0.1,0.045);
         break;
       default:
         add(mkBox(0.5,0.5,0.5,0xC7B8FF));
@@ -5251,10 +5303,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     return g;
   }
 
-  function buildHero(){
-    var b = bridge();
-    var cv = b.playableSprite();
-    var isBoy = b.state.squad === 'boys';
+  function buildCharacter(cv, isBoy){
     var hair = samplePixel(cv, 0.5, 0.05, 0x6B4A2E);
     var skin = samplePixel(cv, 0.5, 0.22, 0xE8B98A);
     var outfit = samplePixel(cv, 0.5, 0.55, 0x8A6BE0);
@@ -5387,9 +5436,20 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     return g;
   }
 
+  function buildHero(){
+    var b = bridge();
+    return buildCharacter(b.playableSprite(), b.state.squad==='boys');
+  }
+  function buildNpc(memberId){
+    var b = bridge();
+    var member = b.npcById(memberId);
+    if(!member) return buildCharacter(b.playableSprite(), b.state.squad==='boys');
+    return buildCharacter(b.castMemberSpriteCanvas(member), !b.isHunter(member));
+  }
   function objectForItem(it){
     if(it.itemId==='hero') return buildHero();
     if(it.itemId==='pet') return buildPet();
+    if(it.itemId.indexOf('npc:')===0) return buildNpc(it.itemId.slice(4));
     return buildFurniture(it.itemId);
   }
 
@@ -5405,28 +5465,31 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
   function buildScene(){
     scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x0B0716, 10, 20);
+    scene.fog = new THREE.Fog(0x0B0716, 16, 32);
 
     camera = new THREE.PerspectiveCamera(48, 1, 0.1, 100);
     updateCamera();
 
-    scene.add(new THREE.AmbientLight(0x9aa0ff, 0.38));
+    scene.add(new THREE.AmbientLight(0x9aa0ff, 0.4));
     var moon = new THREE.DirectionalLight(0xfff2cf, 1.15);
-    moon.position.set(4, 6, 3);
+    moon.position.set(6, 9, 5);
     moon.castShadow = true;
-    moon.shadow.mapSize.set(1024, 1024);
+    moon.shadow.mapSize.set(2048, 2048);
     moon.shadow.camera.left = -ROOM_HALF_W-1;
     moon.shadow.camera.right = ROOM_HALF_W+1;
     moon.shadow.camera.top = ROOM_HALF_D+2;
     moon.shadow.camera.bottom = -ROOM_HALF_D-1;
     moon.shadow.camera.near = 1;
-    moon.shadow.camera.far = 18;
+    moon.shadow.camera.far = 28;
     moon.shadow.bias = -0.0025;
     moon.shadow.radius = 3;
     scene.add(moon);
-    var fill = new THREE.PointLight(0x6f5dd6, 0.4, 20);
-    fill.position.set(-3, 3, -2);
+    var fill = new THREE.PointLight(0x6f5dd6, 0.45, 30);
+    fill.position.set(-4, 4, -3);
     scene.add(fill);
+    var fill2 = new THREE.PointLight(0xffe0b8, 0.3, 26);
+    fill2.position.set(5, 3, 3);
+    scene.add(fill2);
 
     floorMat = new THREE.MeshStandardMaterial({color:0x1B1030, roughness:0.9, side:THREE.DoubleSide});
     var floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(ROOM_HALF_W*2, ROOM_HALF_D*2), floorMat);
@@ -5530,6 +5593,12 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     return raycaster.ray.intersectPlane(floorPlane, pt) ? pt : null;
   }
 
+  function isWalker(itemId){
+    return itemId==='hero' || itemId==='pet' || itemId.indexOf('npc:')===0;
+  }
+  function isHumanoid(itemId){
+    return itemId==='hero' || itemId.indexOf('npc:')===0;
+  }
   function seatInfoFor(itemId){
     if(itemId==='couch') return {height:0.45, offsets:[{x:-0.35,z:0.02},{x:0.35,z:0.02}]};
     if(itemId==='chair') return {height:0.4, offsets:[{x:0,z:0.05}]};
@@ -5545,7 +5614,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     }
     var hitPiece = raycastSprites(ev, rect);
     var selPiece = selectedUid ? findPiece(selectedUid) : null;
-    var canWalk = selPiece && (selPiece.itemId==='hero' || selPiece.itemId==='pet');
+    var canWalk = selPiece && isWalker(selPiece.itemId);
     var seat = hitPiece ? seatInfoFor(hitPiece.itemId) : null;
     if(hitPiece && canWalk && seat && hitPiece.uid !== selPiece.uid){
       var seatIndex = Math.min(seat.offsets.length-1, selPiece.itemId==='pet' ? 1 : 0);
@@ -5632,7 +5701,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
   }
   function onWheel(ev){
     ev.preventDefault();
-    spherical.radius = bridge().roomClamp(spherical.radius + ev.deltaY*0.01, 5, 15);
+    spherical.radius = bridge().roomClamp(spherical.radius + ev.deltaY*0.015, 6, 24);
     updateCamera();
   }
 
@@ -5642,7 +5711,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     x = b.roomClamp(x, -half, half);
     z = b.roomClamp(z, -halfD, halfD);
     var room = b.currentRoom();
-    if(itemId==='hero' || itemId==='pet'){
+    if(itemId==='hero' || itemId==='pet' || itemId.indexOf('npc:')===0){
       room.items = room.items.filter(function(it){ return it.itemId !== itemId; });
     }
     var uid = 'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -5693,7 +5762,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     var t = now/1000;
     var walkingUid = stepWalk(dt);
     pieces.forEach(function(p, i){
-      if(p.itemId==='hero'){
+      if(isHumanoid(p.itemId)){
         var parts = p.obj.userData.parts;
         var isWalking = walkingUid===p.uid;
         if(isWalking && parts){
