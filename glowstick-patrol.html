@@ -285,26 +285,42 @@
   .room-wrap{ display:flex; flex-direction:column; gap:12px; }
   .room-scene{
     position:relative; overflow:hidden; border:1px solid var(--line); border-radius:16px;
-    padding:0;
-    background:linear-gradient(180deg, #241740 0%, #2E1B4A 42%, #1B1030 42%, #150C26 100%);
+    padding:0; perspective:900px;
+    background:linear-gradient(180deg, var(--wall-top,#241740) 0%, var(--wall-shade,#2E1B4A) 42%, var(--floor-top,#1B1030) 42%, var(--floor-shade,#150C26) 100%);
+  }
+  .room-scene::before{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(90deg, rgba(0,0,0,.32) 0%, transparent 16%, transparent 84%, rgba(0,0,0,.32) 100%);
+  }
+  .room-scene::after{
+    content:''; position:absolute; left:0; right:0; top:42%; height:3px; pointer-events:none;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent);
   }
   .room-wall-deco{
     position:absolute; top:14px; right:20px; font-size:26px; opacity:.55;
     filter:drop-shadow(0 0 8px rgba(255,220,150,.35)); pointer-events:none;
   }
   .room-floor{
-    position:relative; height:280px; touch-action:none;
+    position:relative; height:280px; touch-action:none; transform-style:preserve-3d;
     background-image:
       repeating-linear-gradient(rgba(255,255,255,.05) 0 1px, transparent 1px 34px),
       repeating-linear-gradient(90deg, rgba(255,255,255,.05) 0 1px, transparent 1px 14%);
     background-position:0 42%; background-size:100% 58%; background-repeat:no-repeat;
   }
-  .room-piece{
-    position:absolute; cursor:grab; user-select:none; touch-action:none;
-    display:flex; flex-direction:column; align-items:center;
-  }
+  .room-piece{ position:absolute; cursor:grab; touch-action:none; }
   .room-piece:active{ cursor:grabbing; }
+  .piece-inner{
+    display:flex; flex-direction:column; align-items:center; user-select:none;
+    transform-origin:50% 100%;
+  }
   .piece-ico{ font-size:34px; line-height:1; filter:drop-shadow(0 8px 5px rgba(0,0,0,.55)); }
+  .piece-sprite{
+    height:56px; width:auto; display:block;
+    filter:drop-shadow(0 8px 5px rgba(0,0,0,.55));
+    animation:roomBob 2.6s ease-in-out infinite;
+  }
+  @keyframes roomBob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-5px); } }
+  @media (prefers-reduced-motion: reduce){ .piece-sprite{ animation:none; } }
   .piece-shadow{
     width:70%; height:9px; border-radius:50%; margin-top:-4px;
     background:radial-gradient(ellipse at center, rgba(0,0,0,.55), transparent 70%);
@@ -312,15 +328,27 @@
   .room-piece.active .piece-ico{
     filter:drop-shadow(0 8px 5px rgba(0,0,0,.55)) drop-shadow(0 0 0 3px var(--pink));
   }
+  .room-piece.active .piece-sprite{
+    filter:drop-shadow(0 8px 5px rgba(0,0,0,.55)) drop-shadow(0 0 0 3px var(--pink));
+  }
   .room-piece.active{ z-index:999 !important; }
   .room-toolbar{ display:flex; gap:8px; }
   .room-toolbar .btn{ flex:1; font-size:12.5px; padding:9px 4px; }
+  .paint-row{ display:flex; align-items:center; gap:8px; }
+  .paint-row .paint-label{ font-size:11px; color:var(--dim); font-weight:700; width:38px; flex:none; }
+  .paint-dot{
+    width:26px; height:26px; border-radius:50%; cursor:pointer; flex:none;
+    border:2px solid rgba(255,255,255,.25);
+  }
+  .paint-dot.active{ border-color:var(--pink); box-shadow:0 0 0 2px rgba(255,143,196,.3); }
   .room-palette{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .room-item{
     background:var(--panel-soft); border:1px solid var(--line); border-radius:12px;
     padding:8px 4px; text-align:center; cursor:pointer; color:var(--cream); font-size:11px;
   }
   .room-item .ico{ font-size:20px; display:block; margin-bottom:3px; }
+  .room-item .ico-thumb{ width:26px; height:26px; object-fit:contain; display:block; margin:0 auto 3px; }
+  .room-item.char-item{ border-color:rgba(82,232,198,.4); }
   .room-item.selected{ border-color:var(--pink); box-shadow:0 0 0 2px rgba(255,143,196,.3) inset; }
   .room-hint{ font-size:12px; color:var(--dim); text-align:center; }
 
@@ -1836,7 +1864,10 @@
     unlockedBoyPowerups: ['wick'],
     pet: {color:'pink', unlockedColors:['pink'], hunger:70, happiness:70, lastFedAt:0},
     playAsPet: false,
-    rooms: {hunters:{items:[]}, boys:{items:[]}}
+    rooms: {
+      hunters:{items:[], wallPaint:'midnight', floorPaint:'plum', seeded:false},
+      boys:{items:[], wallPaint:'midnight', floorPaint:'plum', seeded:false}
+    }
   };
 
   var state = loadState();
@@ -1894,8 +1925,12 @@
       merged.rooms = merged.rooms || {};
       merged.rooms.hunters = merged.rooms.hunters || {items:[]};
       merged.rooms.hunters.items = merged.rooms.hunters.items || [];
+      merged.rooms.hunters.wallPaint = merged.rooms.hunters.wallPaint || 'midnight';
+      merged.rooms.hunters.floorPaint = merged.rooms.hunters.floorPaint || 'plum';
       merged.rooms.boys = merged.rooms.boys || {items:[]};
       merged.rooms.boys.items = merged.rooms.boys.items || [];
+      merged.rooms.boys.wallPaint = merged.rooms.boys.wallPaint || 'midnight';
+      merged.rooms.boys.floorPaint = merged.rooms.boys.floorPaint || 'plum';
       return merged;
     }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
   }
@@ -2413,6 +2448,20 @@
     {id:'window', name:'Window', icon:'🪟'},
     {id:'poster', name:'Poster', icon:'🖼️'}
   ];
+  var WALL_PAINTS = [
+    {id:'midnight', name:'Midnight', top:'#241740', shade:'#2E1B4A'},
+    {id:'blush',    name:'Blush',    top:'#402234', shade:'#4E2A40'},
+    {id:'teal',     name:'Teal',     top:'#123433', shade:'#164240'},
+    {id:'amber',    name:'Amber',    top:'#3A2A12', shade:'#4A3618'},
+    {id:'slate',    name:'Slate',    top:'#1E2233', shade:'#262C42'}
+  ];
+  var FLOOR_PAINTS = [
+    {id:'plum',     name:'Plum',     top:'#1B1030', shade:'#150C26'},
+    {id:'walnut',   name:'Walnut',   top:'#2A1B12', shade:'#20140D'},
+    {id:'seafoam',  name:'Seafoam',  top:'#0E2624', shade:'#0A1D1B'},
+    {id:'rose',     name:'Rose',     top:'#2A1420', shade:'#200F18'},
+    {id:'charcoal', name:'Charcoal', top:'#181A22', shade:'#121319'}
+  ];
   var ROOM_MIN_SCALE = 0.55, ROOM_MAX_SCALE = 2.0, ROOM_SCALE_STEP = 0.15;
   var roomSelected = null;
   var roomActiveUid = null;
@@ -2420,6 +2469,14 @@
   function furnitureById(id){
     for(var i=0;i<FURNITURE.length;i++){ if(FURNITURE[i].id===id) return FURNITURE[i]; }
     return null;
+  }
+  function wallPaintById(id){
+    for(var i=0;i<WALL_PAINTS.length;i++){ if(WALL_PAINTS[i].id===id) return WALL_PAINTS[i]; }
+    return WALL_PAINTS[0];
+  }
+  function floorPaintById(id){
+    for(var i=0;i<FLOOR_PAINTS.length;i++){ if(FLOOR_PAINTS[i].id===id) return FLOOR_PAINTS[i]; }
+    return FLOOR_PAINTS[0];
   }
   function roomClamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
   function currentRoom(){
@@ -2435,32 +2492,66 @@
       }
       r.items = migrated;
     }
+    r.wallPaint = r.wallPaint || 'midnight';
+    r.floorPaint = r.floorPaint || 'plum';
+    if(!r.seeded){
+      r.items.push({uid:'hero0', itemId:'hero', x:44, y:66, scale:1});
+      r.items.push({uid:'pet0', itemId:'pet', x:66, y:78, scale:1});
+      r.seeded = true;
+    }
     return r;
   }
   function depthScaleFor(yPct){ return 0.6 + (yPct/100)*0.65; }
+  function roomPieceVisual(it){
+    if(it.itemId==='hero') return {sprite: playableSprite().toDataURL()};
+    if(it.itemId==='pet') return {sprite: getAxolotlSprite(petColorById(state.pet.color).hex).toDataURL()};
+    var f = furnitureById(it.itemId);
+    return f ? {icon: f.icon} : null;
+  }
   function renderRoom(){
     var body = document.getElementById('clubBody');
     var room = currentRoom();
     var roomLabel = state.squad==='boys' ? "Lanternboys' Lookout" : "Hunters' Lookout";
+    var wp = wallPaintById(room.wallPaint), fp = floorPaintById(room.floorPaint);
     var activeItem = null;
     var piecesHtml = room.items.map(function(it){
-      var f = furnitureById(it.itemId);
-      if(!f) return '';
+      var visual = roomPieceVisual(it);
+      if(!visual) return '';
       if(it.uid===roomActiveUid) activeItem = it;
       var finalScale = depthScaleFor(it.y) * (it.scale||1);
       var z = Math.round(it.y*10);
+      var inner = visual.sprite ?
+        '<img class="piece-sprite" src="'+visual.sprite+'" alt="">' :
+        '<span class="piece-ico">'+visual.icon+'</span>';
       return '<div class="room-piece'+(it.uid===roomActiveUid?' active':'')+'" data-uid="'+it.uid+'" ' +
-        'style="left:'+it.x+'%; top:'+it.y+'%; z-index:'+z+'; transform:translate(-50%,-100%) scale('+finalScale.toFixed(2)+');">' +
-        '<span class="piece-ico">'+f.icon+'</span><span class="piece-shadow"></span>' +
+        'style="left:'+it.x+'%; top:'+it.y+'%; z-index:'+z+';">' +
+        '<div class="piece-inner" style="transform:translate(-50%,-100%) scale('+finalScale.toFixed(2)+');">' +
+          inner + '<span class="piece-shadow"></span>' +
+        '</div>' +
       '</div>';
     }).join('');
-    var paletteHtml = FURNITURE.map(function(f){
+    var heroExists = room.items.some(function(it){ return it.itemId==='hero'; });
+    var petExists = room.items.some(function(it){ return it.itemId==='pet'; });
+    var charPaletteHtml =
+      '<div class="room-item char-item'+(roomSelected==='hero'?' selected':'')+'" data-item="hero">' +
+        '<img class="ico-thumb" src="'+playableSprite().toDataURL()+'" alt="">'+(heroExists?'Move You':'You') +
+      '</div>' +
+      '<div class="room-item char-item'+(roomSelected==='pet'?' selected':'')+'" data-item="pet">' +
+        '<img class="ico-thumb" src="'+getAxolotlSprite(petColorById(state.pet.color).hex).toDataURL()+'" alt="">'+(petExists?'Move '+PET_NAME:PET_NAME) +
+      '</div>';
+    var paletteHtml = charPaletteHtml + FURNITURE.map(function(f){
       return '<div class="room-item'+(roomSelected===f.id?' selected':'')+'" data-item="'+f.id+'">' +
         '<span class="ico">'+f.icon+'</span>' + f.name +
       '</div>';
     }).join('');
+    var wallDotsHtml = WALL_PAINTS.map(function(w){
+      return '<span class="paint-dot'+(room.wallPaint===w.id?' active':'')+'" data-wall="'+w.id+'" title="'+w.name+'" style="background:'+w.top+';"></span>';
+    }).join('');
+    var floorDotsHtml = FLOOR_PAINTS.map(function(f){
+      return '<span class="paint-dot'+(room.floorPaint===f.id?' active':'')+'" data-floor="'+f.id+'" title="'+f.name+'" style="background:'+f.top+';"></span>';
+    }).join('');
     var hint = roomSelected ? 'Tap anywhere on the floor to place it.' :
-      (activeItem ? 'Drag it to reposition, or resize below.' : 'Pick a piece, then tap the floor. Tap a placed piece to drag or resize it.');
+      (activeItem ? 'Drag it to reposition, or resize below.' : 'Pick a piece or character, then tap the floor. Tap a placed piece to drag or resize it.');
     var toolbarHtml = activeItem ?
       '<div class="room-toolbar">' +
         '<button class="btn btn-ghost" id="roomSmaller">− Smaller</button>' +
@@ -2471,16 +2562,43 @@
       '<div class="room-wrap">' +
         '<div><div class="eyebrow" style="margin-bottom:4px;">'+roomLabel+'</div>' +
         '<p class="room-hint">'+hint+'</p></div>' +
-        '<div class="room-scene"><span class="room-wall-deco">🌙</span><div class="room-floor" id="roomFloor">'+piecesHtml+'</div></div>' +
+        '<div class="room-scene" style="--wall-top:'+wp.top+'; --wall-shade:'+wp.shade+'; --floor-top:'+fp.top+'; --floor-shade:'+fp.shade+';">' +
+          '<span class="room-wall-deco">🌙</span><div class="room-floor" id="roomFloor">'+piecesHtml+'</div>' +
+        '</div>' +
         toolbarHtml +
+        '<div class="paint-row"><span class="paint-label">Walls</span>'+wallDotsHtml+'</div>' +
+        '<div class="paint-row"><span class="paint-label">Floor</span>'+floorDotsHtml+'</div>' +
         '<div class="room-palette">'+paletteHtml+'</div>' +
         '<button class="btn btn-ghost" id="roomClearBtn">Clear Room</button>' +
       '</div>';
 
+    Array.prototype.forEach.call(body.querySelectorAll('.paint-dot[data-wall]'), function(el){
+      el.addEventListener('click', function(){
+        currentRoom().wallPaint = this.dataset.wall;
+        saveState(); renderRoom();
+      });
+    });
+    Array.prototype.forEach.call(body.querySelectorAll('.paint-dot[data-floor]'), function(el){
+      el.addEventListener('click', function(){
+        currentRoom().floorPaint = this.dataset.floor;
+        saveState(); renderRoom();
+      });
+    });
+
     Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(el){
       el.addEventListener('click', function(){
+        var itemId = this.dataset.item;
+        if((itemId==='hero' || itemId==='pet')){
+          var existing = room.items.filter(function(it){ return it.itemId===itemId; })[0];
+          if(existing){
+            roomActiveUid = existing.uid;
+            roomSelected = null;
+            renderRoom();
+            return;
+          }
+        }
         roomActiveUid = null;
-        roomSelected = (roomSelected === this.dataset.item) ? null : this.dataset.item;
+        roomSelected = (roomSelected === itemId) ? null : itemId;
         renderRoom();
       });
     });
@@ -2510,6 +2628,13 @@
         ev.stopPropagation();
         if(roomDrag && roomDrag.moved) return;
         if(roomSelected) return;
+        if(roomActiveUid===uid){
+          var item = room.items.filter(function(it){ return it.uid===uid; })[0];
+          if(item && (item.itemId==='hero' || item.itemId==='pet')){
+            showToast(item.itemId==='hero' ? 'Just hanging out in the lookout.' : PET_NAME+' flops down for a nap.');
+            beep(520,.08,'sine');
+          }
+        }
         roomActiveUid = (roomActiveUid===uid) ? null : uid;
         renderRoom();
       });
@@ -2529,10 +2654,11 @@
         if(!item) return;
         item.x = xPct; item.y = yPct;
         var finalScale = depthScaleFor(item.y) * (item.scale||1);
+        var inner = el.querySelector('.piece-inner');
         el.style.left = xPct+'%';
         el.style.top = yPct+'%';
         el.style.zIndex = Math.round(yPct*10);
-        el.style.transform = 'translate(-50%,-100%) scale('+finalScale.toFixed(2)+')';
+        if(inner) inner.style.transform = 'translate(-50%,-100%) scale('+finalScale.toFixed(2)+')';
       });
       el.addEventListener('pointerup', function(ev){
         if(!roomDrag || roomDrag.uid !== uid) return;
@@ -2563,7 +2689,9 @@
 
     var clearBtn = document.getElementById('roomClearBtn');
     if(clearBtn) clearBtn.addEventListener('click', function(){
-      currentRoom().items = [];
+      var r = currentRoom();
+      r.items = [];
+      r.seeded = false;
       roomActiveUid = null; roomSelected = null;
       saveState();
       renderRoom();
