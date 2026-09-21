@@ -284,21 +284,33 @@
 
   .room-wrap{ display:flex; flex-direction:column; gap:14px; }
   .room-scene{
-    background:linear-gradient(180deg, var(--panel-soft) 0%, var(--panel-soft-2) 100%);
-    border:1px solid var(--line); border-radius:16px; padding:10px;
+    position:relative; overflow:hidden; border:1px solid var(--line); border-radius:16px;
+    padding:14px 12px 26px;
+    background:linear-gradient(180deg, #241740 0%, #2E1B4A 46%, #1B1030 46%, #150C26 100%);
   }
+  .room-wall-deco{
+    position:absolute; top:16px; right:22px; font-size:26px; opacity:.55;
+    filter:drop-shadow(0 0 8px rgba(255,220,150,.35));
+  }
+  .room-floor{ perspective:640px; perspective-origin:50% 0%; }
   .room-grid{
-    display:grid; grid-template-columns:repeat(5,1fr); gap:6px;
-    background:repeating-linear-gradient(90deg, rgba(255,255,255,.04) 0 1px, transparent 1px 20%);
-    border-radius:12px; padding:6px; background-color:rgba(0,0,0,.15);
+    display:grid; grid-template-columns:repeat(5,1fr); gap:8px;
+    border-radius:10px; padding:10px 8px 22px; background:rgba(0,0,0,.18);
+    transform:rotateX(48deg) scale(1.06); transform-origin:50% 0%;
+    box-shadow:0 30px 40px -18px rgba(0,0,0,.6);
   }
+  @media (prefers-reduced-motion: reduce){ .room-grid{ transform:none; } }
   .room-cell{
-    aspect-ratio:1; border-radius:10px; border:1.5px dashed rgba(255,255,255,.18);
-    display:flex; align-items:center; justify-content:center; font-size:22px;
+    aspect-ratio:1; border-radius:8px; border:1.5px dashed rgba(255,255,255,.18);
     cursor:pointer; background:rgba(255,255,255,.03); position:relative;
   }
-  .room-cell.filled{ border-style:solid; border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.06); }
-  .room-cell.target{ border-color:var(--teal); box-shadow:0 0 0 2px rgba(82,232,198,.3) inset; }
+  .room-cell.filled{ border-style:solid; border-color:rgba(255,255,255,.28); background:rgba(255,255,255,.07); }
+  .room-cell .ico-wrap{
+    position:absolute; left:50%; bottom:50%; font-size:22px; line-height:1;
+    transform:translateX(-50%) rotateX(-48deg) translateY(6px) scale(1.35);
+    transform-origin:50% 100%;
+    filter:drop-shadow(0 6px 4px rgba(0,0,0,.5));
+  }
   .room-palette{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
   .room-item{
     background:var(--panel-soft); border:1px solid var(--line); border-radius:12px;
@@ -2417,7 +2429,7 @@
     for(var i=0;i<ROOM_CELLS;i++){
       var placed = room.items[i];
       var f = placed ? furnitureById(placed) : null;
-      cellsHtml += '<div class="room-cell'+(f?' filled':'')+'" data-cell="'+i+'">'+(f?f.icon:'')+'</div>';
+      cellsHtml += '<div class="room-cell'+(f?' filled':'')+'" data-cell="'+i+'">'+(f?'<span class="ico-wrap">'+f.icon+'</span>':'')+'</div>';
     }
     var paletteHtml = FURNITURE.map(function(f){
       return '<div class="room-item'+(roomSelected===f.id?' selected':'')+'" data-item="'+f.id+'">' +
@@ -2428,7 +2440,7 @@
       '<div class="room-wrap">' +
         '<div><div class="eyebrow" style="margin-bottom:4px;">'+roomLabel+'</div>' +
         '<p class="room-hint">Pick a piece below, then tap a spot to place it. Tap a filled spot to clear it.</p></div>' +
-        '<div class="room-scene"><div class="room-grid">'+cellsHtml+'</div></div>' +
+        '<div class="room-scene"><span class="room-wall-deco">🌙</span><div class="room-floor"><div class="room-grid">'+cellsHtml+'</div></div></div>' +
         '<div class="room-palette">'+paletteHtml+'</div>' +
         '<button class="btn btn-ghost" id="roomClearBtn">Clear Room</button>' +
       '</div>';
