@@ -2609,11 +2609,11 @@
             var toolbar = document.getElementById('roomToolbar');
             if(toolbar) toolbar.style.display = hasItem ? 'flex' : 'none';
             if(hintEl) hintEl.textContent = !hasItem ? idleHint :
-              (itemId==='hero' ? 'Tap the floor to walk there, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.');
+              ((itemId==='hero'||itemId==='pet') ? 'Tap the floor to walk there, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.');
           },
           onPlaced: function(itemId){
             Array.prototype.forEach.call(body.querySelectorAll('.room-item'), function(d){ d.classList.remove('selected'); });
-            if(hintEl) hintEl.textContent = itemId==='hero' ? 'Tap the floor to walk there, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.';
+            if(hintEl) hintEl.textContent = (itemId==='hero'||itemId==='pet') ? 'Tap the floor to walk there, or drag to reposition. Resize below.' : 'Drag it to move, or resize below.';
           }
         });
       } else if(tries++ < 150){
@@ -5338,8 +5338,9 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       canvasEl.setPointerCapture(ev.pointerId);
     } else {
       var selPiece = selectedUid ? findPiece(selectedUid) : null;
-      var floorPt = selPiece && selPiece.itemId==='hero' ? raycastFloor(ev, rect) : null;
-      if(selPiece && selPiece.itemId==='hero' && floorPt){
+      var canWalk = selPiece && (selPiece.itemId==='hero' || selPiece.itemId==='pet');
+      var floorPt = canWalk ? raycastFloor(ev, rect) : null;
+      if(canWalk && floorPt){
         dragState = {mode:'walk-or-orbit', startX:ev.clientX, startY:ev.clientY, theta0:spherical.theta, phi0:spherical.phi, uid:selPiece.uid, targetX:floorPt.x, targetZ:floorPt.z, moved:false};
       } else {
         setSelected(null);
@@ -5473,10 +5474,16 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
           }
         }
       } else if(p.itemId==='pet'){
-        p.obj.position.y = 0.04 + Math.sin(t*1.8 + i)*0.025;
-        p.obj.rotation.y = Math.sin(t*0.9 + i)*0.15;
+        var petWalking = walkingUid===p.uid;
         var pparts = p.obj.userData.parts;
-        if(pparts) pparts.tail.rotation.y = Math.sin(t*3 + i)*0.5;
+        if(petWalking){
+          p.obj.position.y = 0.04 + Math.abs(Math.sin(t*7))*0.05;
+          if(pparts) pparts.tail.rotation.y = Math.sin(t*8)*0.7;
+        } else {
+          p.obj.position.y = 0.04 + Math.sin(t*1.8 + i)*0.025;
+          p.obj.rotation.y = Math.sin(t*0.9 + i)*0.15;
+          if(pparts) pparts.tail.rotation.y = Math.sin(t*3 + i)*0.5;
+        }
       } else if(p.obj.userData.glow){
         var pulse = 0.55 + Math.sin(t*2.2 + i)*0.35;
         p.obj.userData.glow.forEach(function(m){ m.material.emissiveIntensity = pulse; });
