@@ -5042,39 +5042,167 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     };
   }
 
-  function emojiTexture(str){
-    var c = document.createElement('canvas'); c.width=c.height=128;
-    var ctx = c.getContext('2d');
-    ctx.font = '92px "Segoe UI Emoji","Apple Color Emoji",sans-serif';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(str, 64, 74);
-    var tex = new THREE.CanvasTexture(c);
-    tex.needsUpdate = true;
-    return tex;
+  // ---- procedural low-poly 3D builders (boxes/cylinders/spheres — no external model files) ----
+  function mkBox(w,h,d,color,emissive){
+    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.7, emissive:emissive||0x000000, emissiveIntensity:0.7});
+    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+    mesh.position.y = h/2;
+    return mesh;
+  }
+  function mkCyl(rTop,rBot,h,color){
+    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.7});
+    var mesh = new THREE.Mesh(new THREE.CylinderGeometry(rTop,rBot,h,16), mat);
+    mesh.position.y = h/2;
+    return mesh;
+  }
+  function mkSphere(r,color){
+    var mat = new THREE.MeshStandardMaterial({color:color, roughness:0.6});
+    var mesh = new THREE.Mesh(new THREE.SphereGeometry(r,16,12), mat);
+    mesh.position.y = r;
+    return mesh;
+  }
+  function samplePixel(canvas, xf, yf, fallback){
+    try{
+      var ctx = canvas.getContext('2d');
+      var x = Math.min(canvas.width-1, Math.max(0, Math.round(canvas.width*xf)));
+      var y = Math.min(canvas.height-1, Math.max(0, Math.round(canvas.height*yf)));
+      var d = ctx.getImageData(x,y,1,1).data;
+      if(d[3] < 40) return fallback;
+      return (d[0]<<16)|(d[1]<<8)|d[2];
+    }catch(e){ return fallback; }
   }
 
-  function spriteForItem(it){
-    var b = bridge();
-    var tex, aspect = 1;
-    if(it.itemId==='hero'){
-      var cv = b.playableSprite();
-      tex = new THREE.CanvasTexture(cv); tex.needsUpdate = true;
-      aspect = cv.width/cv.height;
-    } else if(it.itemId==='pet'){
-      var cv2 = b.getAxolotlSprite(b.petColorById(b.state.pet.color).hex);
-      tex = new THREE.CanvasTexture(cv2); tex.needsUpdate = true;
-      aspect = cv2.width/cv2.height;
-    } else {
-      var f = b.furnitureById(it.itemId);
-      tex = emojiTexture(f ? f.icon : '❓');
-      aspect = 1;
+  function buildFurniture(itemId){
+    var g = new THREE.Group();
+    var glow = [];
+    function add(mesh, x, y, z){
+      mesh.position.x = x||0; mesh.position.y += (y||0); mesh.position.z = z||0;
+      g.add(mesh); return mesh;
     }
-    var mat = new THREE.SpriteMaterial({map:tex, transparent:true, depthWrite:false});
-    var sprite = new THREE.Sprite(mat);
-    sprite.center.set(0.5, 0);
-    var h = BASE_HEIGHT * (it.scale||1);
-    sprite.scale.set(h*aspect, h, 1);
-    return sprite;
+    switch(itemId){
+      case 'couch':
+        add(mkBox(1.5,0.45,0.65,0xE0517A));
+        add(mkBox(1.5,0.4,0.15,0xC93F63), 0,0.45,-0.25);
+        add(mkBox(0.15,0.55,0.65,0xC93F63), -0.68);
+        add(mkBox(0.15,0.55,0.65,0xC93F63), 0.68);
+        break;
+      case 'chair':
+        add(mkBox(0.55,0.4,0.55,0x8C6A4E));
+        add(mkBox(0.55,0.5,0.12,0x74553A), 0,0.4,-0.2);
+        add(mkBox(0.08,0.4,0.08,0x5A3E28), -0.22,0,0.22);
+        add(mkBox(0.08,0.4,0.08,0x5A3E28), 0.22,0,0.22);
+        break;
+      case 'tv':
+        add(mkBox(0.12,0.35,0.12,0x2B2B33));
+        add(mkBox(1.0,0.65,0.08,0x14161C), 0,0.35);
+        glow.push(add(mkBox(0.9,0.52,0.02,0x3AA1D8,0x2C7FA8), 0,0.35,0.03));
+        break;
+      case 'kitchen':
+        add(mkBox(1.3,0.85,0.6,0xB8C4CC));
+        add(mkCyl(0.08,0.08,0.05,0x2B2B33), -0.35,0.85,0.15);
+        add(mkCyl(0.08,0.08,0.05,0x2B2B33), 0.05,0.85,0.15);
+        break;
+      case 'fridge':
+        add(mkBox(0.7,1.7,0.65,0xE7EEF2));
+        add(mkBox(0.03,1.4,0.05,0xAFC0C9), -0.3,0,0.33);
+        break;
+      case 'closetitem':
+        add(mkBox(0.9,1.9,0.55,0x7A5230));
+        add(mkBox(0.03,1.7,0.03,0x4E3620), -0.02,0,0.29);
+        add(mkSphere(0.03,0xC9A24B), -0.15,0.9,0.29);
+        add(mkSphere(0.03,0xC9A24B), 0.15,0.9,0.29);
+        break;
+      case 'bed':
+        add(mkBox(1.6,0.3,0.9,0x6B4A2E));
+        add(mkBox(1.5,0.2,0.8,0xF3E3E8), 0,0.3);
+        add(mkBox(0.4,0.15,0.7,0xFFFFFF), -0.5,0.5);
+        add(mkBox(1.6,0.55,0.1,0x6B4A2E), 0,0.3,-0.4);
+        break;
+      case 'table':
+        add(mkBox(1.2,0.08,0.7,0x8C6A4E));
+        [[-0.5,-0.28],[0.5,-0.28],[-0.5,0.28],[0.5,0.28]].forEach(function(p){
+          add(mkBox(0.08,0.5,0.08,0x6B4A2E), p[0],0,p[1]);
+        });
+        break;
+      case 'bookshelf':
+        add(mkBox(0.9,1.7,0.35,0x6B4A2E));
+        [0.4,0.8,1.2].forEach(function(y){ add(mkBox(0.82,0.04,0.32,0x4E3620), 0,y); });
+        [0xE05175,0x52E8C6,0xFFC15E,0x8A6BE0].forEach(function(c,i){
+          add(mkBox(0.12,0.3,0.28,c), -0.32+i*0.22, 0.44);
+        });
+        break;
+      case 'arcade':
+        add(mkBox(0.7,1.5,0.65,0x241B3A));
+        glow.push(add(mkBox(0.5,0.5,0.05,0x52E8C6,0x2FA894), 0,1.0,0.33));
+        glow.push(add(mkBox(0.7,0.2,0.05,0xFF8FC4,0xB2568C), 0,1.5,0.33));
+        break;
+      case 'plant':
+        add(mkCyl(0.22,0.28,0.35,0xB05C3A));
+        add(mkSphere(0.35,0x3E8E5B), 0,0.55);
+        break;
+      case 'lamp':
+        add(mkCyl(0.18,0.2,0.05,0x2B2B33));
+        add(mkCyl(0.03,0.03,0.9,0x555555), 0,0.05);
+        glow.push(add(new THREE.Mesh(new THREE.ConeGeometry(0.22,0.3,16), new THREE.MeshStandardMaterial({color:0xF4C95D, emissive:0xF4C95D, emissiveIntensity:0.9})), 0,0.95));
+        break;
+      case 'rug':
+        add(mkBox(1.3,0.03,0.9,0x8B5FBF));
+        break;
+      case 'window':
+        add(mkBox(0.9,1.1,0.06,0x5A4A78));
+        add(mkBox(0.75,0.95,0.03,0x8FD3F4), 0,0.08,0.02);
+        add(mkBox(0.03,0.95,0.04,0x5A4A78), 0,0.08,0.04);
+        break;
+      case 'poster':
+        add(mkBox(0.65,0.85,0.05,0xE3A6C4));
+        add(mkBox(0.55,0.7,0.02,0xFFFFFF), 0,0.07,0.03);
+        break;
+      default:
+        add(mkBox(0.5,0.5,0.5,0xC7B8FF));
+    }
+    if(glow.length) g.userData.glow = glow;
+    return g;
+  }
+
+  function buildHero(){
+    var cv = bridge().playableSprite();
+    var hair = samplePixel(cv, 0.5, 0.08, 0x6B4A2E);
+    var skin = samplePixel(cv, 0.5, 0.22, 0xE8B98A);
+    var outfit = samplePixel(cv, 0.5, 0.55, 0x8A6BE0);
+    var boots = samplePixel(cv, 0.5, 0.95, 0x2B2B33);
+    var g = new THREE.Group();
+    var legL = mkBox(0.16,0.42,0.18, boots); legL.position.x = -0.13; g.add(legL);
+    var legR = mkBox(0.16,0.42,0.18, boots); legR.position.x = 0.13; g.add(legR);
+    var torso = mkBox(0.42,0.5,0.24, outfit); torso.position.y += 0.42; g.add(torso);
+    var armL = mkBox(0.13,0.4,0.13, outfit); armL.position.set(-0.29, 0.42+0.06, 0); g.add(armL);
+    var armR = mkBox(0.13,0.4,0.13, outfit); armR.position.set(0.29, 0.42+0.06, 0); g.add(armR);
+    var head = mkBox(0.32,0.32,0.3, skin); head.position.y += 0.42+0.5; g.add(head);
+    var hairMesh = mkBox(0.34,0.16,0.32, hair); hairMesh.position.y = head.position.y + 0.16+0.08; g.add(hairMesh);
+    g.userData.parts = {armL:armL, armR:armR};
+    return g;
+  }
+
+  function buildPet(){
+    var color = bridge().petColorById(bridge().state.pet.color).hex;
+    var g = new THREE.Group();
+    var body = mkSphere(0.22, color); body.scale.set(1.3,0.8,1); g.add(body);
+    var head = mkSphere(0.16, color); head.position.set(0, 0.19, 0.24); g.add(head);
+    var tail = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.35,12), new THREE.MeshStandardMaterial({color:color}));
+    tail.rotation.z = Math.PI/2; tail.position.set(0, 0.16, -0.32); g.add(tail);
+    [[-0.16,0.19,0.3],[0.16,0.19,0.3]].forEach(function(p){
+      var gill = new THREE.Mesh(new THREE.ConeGeometry(0.03,0.14,6), new THREE.MeshStandardMaterial({color:0xFF9EC4}));
+      gill.position.set(p[0],p[1],p[2]);
+      gill.rotation.z = p[0]<0 ? 0.7 : -0.7;
+      g.add(gill);
+    });
+    g.userData.parts = {tail:tail};
+    return g;
+  }
+
+  function objectForItem(it){
+    if(it.itemId==='hero') return buildHero();
+    if(it.itemId==='pet') return buildPet();
+    return buildFurniture(it.itemId);
   }
 
   function shadowForItem(it){
@@ -5138,14 +5266,15 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     pieces = [];
     var room = bridge().currentRoom();
     room.items.forEach(function(it){
-      var sprite = spriteForItem(it);
+      var obj = objectForItem(it);
       var shadow = shadowForItem(it);
       var w = pctToWorld(it.x, it.y);
-      sprite.position.set(w.x, 0, w.z);
-      sprite.userData.uid = it.uid;
+      obj.position.set(w.x, 0, w.z);
+      obj.scale.setScalar(it.scale||1);
+      obj.userData.uid = it.uid;
       shadow.position.set(w.x, 0.01, w.z);
-      scene.add(sprite); scene.add(shadow);
-      pieces.push({uid:it.uid, itemId:it.itemId, obj:sprite, shadow:shadow});
+      scene.add(obj); scene.add(shadow);
+      pieces.push({uid:it.uid, itemId:it.itemId, obj:obj, shadow:shadow});
     });
   }
 
@@ -5156,20 +5285,33 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     return null;
   }
 
+  function setHighlight(root, on){
+    root.traverse(function(o){
+      if(o.isMesh && o.material && o.material.emissive){
+        if(o.userData.baseEmissive===undefined) o.userData.baseEmissive = o.material.emissive.getHex();
+        if(on) o.material.emissive.setHex(0xff5fa8);
+        else o.material.emissive.setHex(o.userData.baseEmissive);
+      }
+    });
+  }
   function setSelected(uid){
+    if(selectedUid){ var prev = findPiece(selectedUid); if(prev) setHighlight(prev.obj, false); }
     selectedUid = uid;
-    pieces.forEach(function(p){ p.obj.material.color.setHex(p.uid===uid ? 0xffc7e6 : 0xffffff); });
+    if(uid){ var cur = findPiece(uid); if(cur) setHighlight(cur.obj, true); }
     if(callbacks.onSelectionChange) callbacks.onSelectionChange(!!uid);
   }
 
   function pointerToNDC(ev, rect){
     return new THREE.Vector2(((ev.clientX-rect.left)/rect.width)*2 - 1, -((ev.clientY-rect.top)/rect.height)*2 + 1);
   }
+  function rootOf(obj){ while(obj && obj.userData.uid===undefined){ obj = obj.parent; } return obj; }
   function raycastSprites(ev, rect){
     var ndc = pointerToNDC(ev, rect);
     raycaster.setFromCamera(ndc, camera);
-    var hits = raycaster.intersectObjects(pieces.map(function(p){ return p.obj; }), false);
-    return hits.length ? findPiece(hits[0].object.userData.uid) : null;
+    var hits = raycaster.intersectObjects(pieces.map(function(p){ return p.obj; }), true);
+    if(!hits.length) return null;
+    var root = rootOf(hits[0].object);
+    return root ? findPiece(root.userData.uid) : null;
   }
   function raycastFloor(ev, rect){
     var ndc = pointerToNDC(ev, rect);
@@ -5256,8 +5398,21 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     rafId = requestAnimationFrame(animate);
     var t = performance.now()/1000;
     pieces.forEach(function(p, i){
-      if(p.itemId==='hero' || p.itemId==='pet'){
-        p.obj.position.y = 0.08 + Math.sin(t*1.6 + i)*0.04;
+      if(p.itemId==='hero'){
+        p.obj.position.y = 0.06 + Math.sin(t*1.6 + i)*0.03;
+        var parts = p.obj.userData.parts;
+        if(parts){
+          parts.armL.rotation.x = Math.sin(t*2 + i)*0.35;
+          parts.armR.rotation.x = -Math.sin(t*2 + i)*0.35;
+        }
+      } else if(p.itemId==='pet'){
+        p.obj.position.y = 0.04 + Math.sin(t*1.8 + i)*0.025;
+        p.obj.rotation.y = Math.sin(t*0.9 + i)*0.15;
+        var pparts = p.obj.userData.parts;
+        if(pparts) pparts.tail.rotation.y = Math.sin(t*3 + i)*0.5;
+      } else if(p.obj.userData.glow){
+        var pulse = 0.55 + Math.sin(t*2.2 + i)*0.35;
+        p.obj.userData.glow.forEach(function(m){ m.material.emissiveIntensity = pulse; });
       }
     });
     renderer.render(scene, camera);
@@ -5328,9 +5483,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       if(!item || !piece) return;
       var b = bridge();
       item.scale = b.roomClamp((item.scale||1) + delta, b.ROOM_MIN_SCALE, b.ROOM_MAX_SCALE);
-      var aspect = piece.obj.scale.x / piece.obj.scale.y;
-      var h = BASE_HEIGHT * item.scale;
-      piece.obj.scale.set(h*aspect, h, 1);
+      piece.obj.scale.setScalar(item.scale);
       var r = 0.3*item.scale;
       piece.shadow.scale.set(r, r, 1);
       b.saveState();
