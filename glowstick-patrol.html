@@ -5080,6 +5080,33 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
       return (d[0]<<16)|(d[1]<<8)|d[2];
     }catch(e){ return fallback; }
   }
+  // crops a rectangle (fractions of the source canvas) into its own canvas/texture,
+  // so a piece of the game's existing pixel-art sprite can be pasted onto a box face
+  function cropTexture(canvas, xf0, yf0, xf1, yf1){
+    try{
+      var sx = Math.round(canvas.width*xf0), sy = Math.round(canvas.height*yf0);
+      var sw = Math.round(canvas.width*(xf1-xf0)), sh = Math.round(canvas.height*(yf1-yf0));
+      var c = document.createElement('canvas'); c.width = sw; c.height = sh;
+      c.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+      var tex = new THREE.CanvasTexture(c);
+      tex.magFilter = THREE.NearestFilter;
+      tex.minFilter = THREE.LinearFilter;
+      tex.generateMipmaps = false;
+      tex.needsUpdate = true;
+      return tex;
+    }catch(e){ return null; }
+  }
+  // a box whose front (+z) face shows a real texture crop, other faces stay a flat color
+  function mkFacedBox(w,h,d,sideColor,frontTex){
+    var side = new THREE.MeshStandardMaterial({color:sideColor, roughness:0.8});
+    var front = frontTex ?
+      new THREE.MeshStandardMaterial({map:frontTex, roughness:0.8}) :
+      new THREE.MeshStandardMaterial({color:sideColor, roughness:0.8});
+    var mats = [side, side, side, side, front, side]; // +x,-x,+y,-y,+z,-z
+    var mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mats);
+    mesh.position.y = h/2;
+    return mesh;
+  }
 
   function buildFurniture(itemId){
     var g = new THREE.Group();
@@ -5175,45 +5202,34 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
 
   function buildHero(){
     var cv = bridge().playableSprite();
-    var hair = samplePixel(cv, 0.5, 0.08, 0x6B4A2E);
+    var hair = samplePixel(cv, 0.5, 0.05, 0x6B4A2E);
     var skin = samplePixel(cv, 0.5, 0.22, 0xE8B98A);
     var outfit = samplePixel(cv, 0.5, 0.55, 0x8A6BE0);
     var boots = samplePixel(cv, 0.5, 0.95, 0x2B2B33);
+    var faceTex = cropTexture(cv, 0.28, 0.13, 0.72, 0.31);
+    var hairTex = cropTexture(cv, 0.12, 0.0, 0.88, 0.16);
+    var outfitTex = cropTexture(cv, 0.18, 0.42, 0.82, 0.78);
     var g = new THREE.Group();
     var legL = mkBox(0.16,0.42,0.18, boots); legL.position.x = -0.13; g.add(legL);
     var legR = mkBox(0.16,0.42,0.18, boots); legR.position.x = 0.13; g.add(legR);
-    var torso = mkBox(0.42,0.5,0.24, outfit); torso.position.y += 0.42; g.add(torso);
+    var torso = mkFacedBox(0.42,0.5,0.24, outfit, outfitTex); torso.position.y += 0.42; g.add(torso);
     var armL = mkBox(0.13,0.4,0.13, outfit); armL.position.set(-0.29, 0.42+0.06, 0); g.add(armL);
     var armR = mkBox(0.13,0.4,0.13, outfit); armR.position.set(0.29, 0.42+0.06, 0); g.add(armR);
-    var head = mkBox(0.32,0.32,0.3, skin); head.position.y += 0.42+0.5; g.add(head);
-    var hairMesh = mkBox(0.34,0.16,0.32, hair); hairMesh.position.y = head.position.y + 0.16+0.08; g.add(hairMesh);
-    var faceMat = new THREE.MeshStandardMaterial({color:0x2B2033});
-    var eyeGeo = new THREE.SphereGeometry(0.032, 8, 8);
-    var eyeL = new THREE.Mesh(eyeGeo, faceMat); eyeL.position.set(-0.08, head.position.y+0.02, 0.16); g.add(eyeL);
-    var eyeR = new THREE.Mesh(eyeGeo, faceMat); eyeR.position.set(0.08, head.position.y+0.02, 0.16); g.add(eyeR);
-    var mouth = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.02,0.02), new THREE.MeshStandardMaterial({color:0xB5654A}));
-    mouth.position.set(0, head.position.y-0.08, 0.16); g.add(mouth);
+    var head = mkFacedBox(0.32,0.32,0.3, skin, faceTex); head.position.y += 0.42+0.5; g.add(head);
+    var hairMesh = mkFacedBox(0.34,0.16,0.32, hair, hairTex); hairMesh.position.y = head.position.y + 0.16+0.08; g.add(hairMesh);
     g.userData.parts = {armL:armL, armR:armR, legL:legL, legR:legR};
     return g;
   }
 
   function buildPet(){
     var color = bridge().petColorById(bridge().state.pet.color).hex;
+    var cv = bridge().getAxolotlSprite(color);
+    var faceTex = cropTexture(cv, 0.5, 0.05, 1.0, 0.95);
     var g = new THREE.Group();
     var body = mkSphere(0.22, color); body.scale.set(1.3,0.8,1); g.add(body);
-    var head = mkSphere(0.16, color); head.position.set(0, 0.19, 0.24); g.add(head);
+    var head = mkFacedBox(0.3,0.26,0.22, color, faceTex); head.position.set(0, 0.19, 0.24); g.add(head);
     var tail = new THREE.Mesh(new THREE.ConeGeometry(0.1,0.35,12), new THREE.MeshStandardMaterial({color:color}));
     tail.rotation.z = Math.PI/2; tail.position.set(0, 0.16, -0.32); g.add(tail);
-    [[-0.16,0.19,0.3],[0.16,0.19,0.3]].forEach(function(p){
-      var gill = new THREE.Mesh(new THREE.ConeGeometry(0.03,0.14,6), new THREE.MeshStandardMaterial({color:0xFF9EC4}));
-      gill.position.set(p[0],p[1],p[2]);
-      gill.rotation.z = p[0]<0 ? 0.7 : -0.7;
-      g.add(gill);
-    });
-    var eyeMat = new THREE.MeshStandardMaterial({color:0x241B3A});
-    var eyeGeo2 = new THREE.SphereGeometry(0.03, 8, 8);
-    var eL = new THREE.Mesh(eyeGeo2, eyeMat); eL.position.set(-0.07, 0.23, 0.37); g.add(eL);
-    var eR = new THREE.Mesh(eyeGeo2, eyeMat); eR.position.set(0.07, 0.23, 0.37); g.add(eR);
     g.userData.parts = {tail:tail};
     return g;
   }
@@ -5305,12 +5321,19 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.m
     return null;
   }
 
+  function tintMaterial(m, on, store, idx){
+    if(!m || !m.emissive) return;
+    var key = 'baseEmissive'+idx;
+    if(store[key]===undefined) store[key] = m.emissive.getHex();
+    m.emissive.setHex(on ? 0xff5fa8 : store[key]);
+  }
   function setHighlight(root, on){
     root.traverse(function(o){
-      if(o.isMesh && o.material && o.material.emissive){
-        if(o.userData.baseEmissive===undefined) o.userData.baseEmissive = o.material.emissive.getHex();
-        if(on) o.material.emissive.setHex(0xff5fa8);
-        else o.material.emissive.setHex(o.userData.baseEmissive);
+      if(!o.isMesh || !o.material) return;
+      if(Array.isArray(o.material)){
+        o.material.forEach(function(m, idx){ tintMaterial(m, on, o.userData, idx); });
+      } else {
+        tintMaterial(o.material, on, o.userData, 0);
       }
     });
   }
